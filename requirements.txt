@@ -1,3 +1,4 @@
+#requirements
 aniso8601==9.0.1
 asgiref==3.8.1
 Brotli==1.1.0
