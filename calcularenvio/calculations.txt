@@ -1,0 +1,53 @@
+import requests
+from decimal import Decimal, ROUND_HALF_UP
+
+# Definir el token directamente en el código (no recomendado para producción)
+MAPBOX_ACCESS_TOKEN = "pk.eyJ1IjoiZGF5a2V2MTIiLCJhIjoiY204MTd5NzR3MGdxYTJqcGlsa29odnQ5YiJ9.tbAEt453VxfJoDatpU72YQ"
+
+def calcular_distancia_mapbox(origen_coords, destino_coords):
+    """
+    Calcula la distancia entre dos coordenadas utilizando la API de Mapbox Directions.
+    
+    Se espera que las coordenadas sean en el formato (longitud, latitud).
+    
+    :param origen_coords: Coordenadas de origen (longitud, latitud)
+    :param destino_coords: Coordenadas de destino (longitud, latitud)
+    
+    :return: Distancia en kilómetros como Decimal
+    """
+    if not MAPBOX_ACCESS_TOKEN:
+        raise ValueError("El token de Mapbox no está definido.")
+
+    url = f"https://api.mapbox.com/directions/v5/mapbox/driving/{origen_coords[0]},{origen_coords[1]};{destino_coords[0]},{destino_coords[1]}"
+    params = {
+        "access_token": MAPBOX_ACCESS_TOKEN,
+        "geometries": "geojson",
+        "overview": "full",
+        "steps": "true",
+        "alternatives": "false"
+    }
+
+    try:
+        response = requests.get(url, params=params, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+    except requests.RequestException as e:
+        raise Exception(f"Error al conectar con Mapbox: {str(e)}")
+    
+    if "routes" not in data or not data["routes"]:
+        raise Exception("No se encontraron rutas en la respuesta de Mapbox.")
+
+    try:
+        distancia_metros = data["routes"][0]["distance"]
+    except (KeyError, IndexError):
+        raise Exception("Formato inesperado en la respuesta de Mapbox.")
+
+    distancia_km = Decimal(distancia_metros) / Decimal(1000)
+    return distancia_km.quantize(Decimal(".01"), rounding=ROUND_HALF_UP)
+
+# Ejemplo de uso:
+origen = (-99.1332, 19.4326)  # Coordenadas de Ciudad de México (longitud, latitud)
+destino = (-89.1658, 21.1619)  # Coordenadas de Cancún (longitud, latitud)
+
+distancia = calcular_distancia_mapbox(origen, destino)
+print(f"La distancia es: {distancia} km")
