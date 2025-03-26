@@ -5,19 +5,22 @@ from horarios.models import Horario
 from horarios.schema import HorarioType
 from django.contrib.auth.models import User
 
+# Función para verificar si un PIN es secuencial
 def es_secuencial(pin):
-    # Verifica si los dígitos están en secuencia ascendente o descendente
     ascending = all(int(pin[i]) + 1 == int(pin[i+1]) for i in range(len(pin) - 1))
     descending = all(int(pin[i]) - 1 == int(pin[i+1]) for i in range(len(pin) - 1))
     return ascending or descending
 
+# Tipo GraphQL para el modelo Chofer
 class ChoferType(DjangoObjectType):
     class Meta:
         model = Chofer
 
+# Definición de consultas GraphQL
 class Query(graphene.ObjectType):
     all_choferes = graphene.List(ChoferType)
     chofer_by_id = graphene.Field(ChoferType, id=graphene.Int())
+    chofer_autenticado = graphene.Field(ChoferType)  # Nueva consulta
 
     def resolve_all_choferes(self, info, **kwargs):
         user = info.context.user
@@ -34,7 +37,17 @@ class Query(graphene.ObjectType):
         except Chofer.DoesNotExist:
             return None
 
-# Mutación para crear un Chofer (sin PIN)
+    def resolve_chofer_autenticado(self, info):
+        user = info.context.user
+        if not user.is_authenticated:
+            raise Exception("Debes estar autenticado para ver tu información.")
+
+        try:
+            return Chofer.objects.get(usuario=user)
+        except Chofer.DoesNotExist:
+            raise Exception("No tienes un chofer asociado a tu cuenta.")
+
+# Mutación para crear un Chofer
 class CreateChofer(graphene.Mutation):
     class Arguments:
         nombre = graphene.String(required=True)
@@ -51,21 +64,25 @@ class CreateChofer(graphene.Mutation):
         if not user.is_authenticated:
             raise Exception("Debes estar autenticado para crear un chofer.")
 
-        horario = Horario.objects.get(id=horario_id)
+        try:
+            horario = Horario.objects.get(id=horario_id)
+        except Horario.DoesNotExist:
+            raise Exception("El horario especificado no existe.")
+
         chofer = Chofer(
             nombre=nombre,
             apellidos=apellidos,
-            usuario=user,  # Se asigna directamente el usuario autenticado
+            usuario=user,
             rfc=rfc,
             licencia=licencia,
             certificaciones=certificaciones,
             horario=horario,
-            pin=None  # Inicialmente sin PIN
+            pin=None  # Se inicializa sin PIN
         )
         chofer.save()
         return CreateChofer(chofer=chofer)
 
-# Mutación para que el chofer cree su PIN después
+# Mutación para establecer el PIN del chofer
 class SetChoferPin(graphene.Mutation):
     class Arguments:
         pin = graphene.String(required=True)
@@ -73,7 +90,7 @@ class SetChoferPin(graphene.Mutation):
     chofer = graphene.Field(ChoferType)
 
     def mutate(self, info, pin):
-        user = info.context.user  # Obtener usuario autenticado
+        user = info.context.user
         if not user.is_authenticated:
             raise Exception("Debes estar autenticado para establecer un PIN.")
 
@@ -82,11 +99,9 @@ class SetChoferPin(graphene.Mutation):
         except Chofer.DoesNotExist:
             raise Exception("No tienes permiso para establecer un PIN.")
 
-        # Validación: El PIN debe ser un número de 4 dígitos
         if not pin.isdigit() or len(pin) != 4:
             raise Exception("El PIN debe contener exactamente 4 dígitos numéricos.")
 
-        # Validación: El PIN no debe ser secuencial
         if es_secuencial(pin):
             raise Exception("El PIN no puede ser una secuencia numérica.")
 
@@ -94,7 +109,7 @@ class SetChoferPin(graphene.Mutation):
         chofer.save()
         return SetChoferPin(chofer=chofer)
 
-# Mutación para editar (actualizar) el PIN del chofer existente
+# Mutación para actualizar el PIN del chofer
 class UpdateChoferPin(graphene.Mutation):
     class Arguments:
         pin = graphene.String(required=True)
@@ -102,7 +117,7 @@ class UpdateChoferPin(graphene.Mutation):
     chofer = graphene.Field(ChoferType)
 
     def mutate(self, info, pin):
-        user = info.context.user  # Obtener usuario autenticado
+        user = info.context.user
         if not user.is_authenticated:
             raise Exception("Debes estar autenticado para editar el PIN.")
 
@@ -111,11 +126,9 @@ class UpdateChoferPin(graphene.Mutation):
         except Chofer.DoesNotExist:
             raise Exception("No tienes permiso para editar el PIN.")
 
-        # Validación: El PIN debe ser un número de 4 dígitos
         if not pin.isdigit() or len(pin) != 4:
             raise Exception("El PIN debe contener exactamente 4 dígitos numéricos.")
 
-        # Validación: El PIN no debe ser secuencial
         if es_secuencial(pin):
             raise Exception("El PIN no puede ser una secuencia numérica.")
 
@@ -123,9 +136,11 @@ class UpdateChoferPin(graphene.Mutation):
         chofer.save()
         return UpdateChoferPin(chofer=chofer)
 
+# Definición de Mutaciones
 class Mutation(graphene.ObjectType):
     create_chofer = CreateChofer.Field()
     set_chofer_pin = SetChoferPin.Field()
     update_chofer_pin = UpdateChoferPin.Field()
 
+# Definición del esquema GraphQL
 schema = graphene.Schema(query=Query, mutation=Mutation)
