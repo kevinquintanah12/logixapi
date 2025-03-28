@@ -2,23 +2,27 @@ import graphene
 from graphene_django import DjangoObjectType
 from .models import Destinatario
 
-# Definición del tipo Destinatario para GraphQL
+# Tipo GraphQL para Destinatario
 class DestinatarioType(DjangoObjectType):
     class Meta:
         model = Destinatario
-        fields = "__all__"  # Puedes especificar los campos que quieres exponer aquí
+        fields = "__all__"
 
-# Consultas para Destinatario
+# Query para obtener destinatarios
 class Query(graphene.ObjectType):
     destinatario = graphene.Field(DestinatarioType, id=graphene.Int(required=True))
+    todos_los_destinatarios = graphene.List(DestinatarioType)
 
     def resolve_destinatario(self, info, id):
         return Destinatario.objects.get(id=id)
 
-# Mutaciones para Destinatario
+    def resolve_todos_los_destinatarios(self, info):
+        return Destinatario.objects.all()
+
+# Mutación para crear un destinatario
 class CrearDestinatario(graphene.Mutation):
     class Arguments:
-        rfc = graphene.String(required=True)
+        rfc = graphene.String(required=False)
         nombre = graphene.String(required=True)
         apellidos = graphene.String(required=True)
         correo_electronico = graphene.String()
@@ -34,27 +38,15 @@ class CrearDestinatario(graphene.Mutation):
 
     destinatario = graphene.Field(DestinatarioType)
 
-    def mutate(self, info, rfc, nombre, apellidos, correo_electronico, telefono, pin, direccion_detallada, calle, colonia, numero, ciudad, estado, codigo_postal):
-        destinatario = Destinatario.objects.create(
-            rfc=rfc,
-            nombre=nombre,
-            apellidos=apellidos,
-            correo_electronico=correo_electronico,
-            telefono=telefono,
-            pin=pin,
-            direccion_detallada=direccion_detallada,
-            calle=calle,
-            colonia=colonia,
-            numero=numero,
-            ciudad=ciudad,
-            estado=estado,
-            codigo_postal=codigo_postal
-        )
+    def mutate(self, info, **kwargs):
+        destinatario = Destinatario(**kwargs)
+        destinatario.obtener_coordenadas()  # Obtiene las coordenadas antes de guardar
+        destinatario.save()
         return CrearDestinatario(destinatario=destinatario)
 
 # Esquema de Mutaciones
 class Mutation(graphene.ObjectType):
     crear_destinatario = CrearDestinatario.Field()
 
-# Esquema completo de Destinatario
+# Esquema completo
 schema = graphene.Schema(query=Query, mutation=Mutation)

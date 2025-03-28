@@ -20,7 +20,9 @@ class ChoferType(DjangoObjectType):
 class Query(graphene.ObjectType):
     all_choferes = graphene.List(ChoferType)
     chofer_by_id = graphene.Field(ChoferType, id=graphene.Int())
-    chofer_autenticado = graphene.Field(ChoferType)  # Nueva consulta
+    chofer_autenticado = graphene.Field(ChoferType)
+    # Nuevo query para verificar el PIN
+    check_pin = graphene.Boolean(pin=graphene.String(required=True))
 
     def resolve_all_choferes(self, info, **kwargs):
         user = info.context.user
@@ -41,11 +43,21 @@ class Query(graphene.ObjectType):
         user = info.context.user
         if not user.is_authenticated:
             raise Exception("Debes estar autenticado para ver tu información.")
-
         try:
             return Chofer.objects.get(usuario=user)
         except Chofer.DoesNotExist:
             raise Exception("No tienes un chofer asociado a tu cuenta.")
+
+    def resolve_check_pin(self, info, pin):
+        user = info.context.user
+        if not user.is_authenticated:
+            raise Exception("Debes estar autenticado para verificar el PIN.")
+        try:
+            chofer = Chofer.objects.get(usuario=user)
+        except Chofer.DoesNotExist:
+            raise Exception("No se encontró un chofer asociado a tu cuenta.")
+        # Compara el PIN ingresado con el almacenado en el chofer
+        return chofer.pin == pin
 
 # Mutación para crear un Chofer
 class CreateChofer(graphene.Mutation):

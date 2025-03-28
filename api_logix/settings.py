@@ -62,6 +62,9 @@ INSTALLED_APPS = [
     'destinatario',
     'producto',
     'paquete',
+    'entrega',
+    'camiones',
+    'rutas',
 
     'corsheaders',
 
@@ -107,7 +110,7 @@ WSGI_APPLICATION = 'api_logix.wsgi.application'
 DATABASES = {
     'default': dj_database_url.config(
         # Replace this value with your local database's connection string.
-        default='postgresql://postgres:postgres@localhost:5432/mysite',
+        default='postgresql://postgres:postgres@localhost:5432/logix_db',
         conn_max_age=600
     )
 }
