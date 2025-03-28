@@ -4,8 +4,7 @@ from camiones.models import Camion
 from entrega.models import Entrega  # Importa Entrega para hacer la referencia
 
 class Ruta(models.Model):
-    ruta_origen = models.CharField(max_length=255)
-    ruta_destino = models.CharField(max_length=255)
+   
     distancia = models.FloatField()
     prioridad = models.IntegerField()
     conductor = models.ForeignKey(Chofer, on_delete=models.CASCADE)

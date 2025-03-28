@@ -3,7 +3,7 @@ from graphene_django.types import DjangoObjectType
 from .models import Ruta
 from chofer.models import Chofer
 from camiones.models import Camion
-from entrega.models import Entrega  # Importa Entrega para la referencia
+from entrega.models import Entrega
 
 # Tipo GraphQL para Ruta
 class RutaType(DjangoObjectType):
@@ -14,8 +14,6 @@ class RutaType(DjangoObjectType):
 # Mutación para crear una ruta
 class CrearRuta(graphene.Mutation):
     class Arguments:
-        ruta_origen = graphene.String(required=True)
-        ruta_destino = graphene.String(required=True)
         distancia = graphene.Float(required=True)
         prioridad = graphene.Int(required=True)
         conductor_id = graphene.Int(required=True)  # Se agrega conductor_id
@@ -27,14 +25,12 @@ class CrearRuta(graphene.Mutation):
 
     ruta = graphene.Field(RutaType)
 
-    def mutate(self, info, ruta_origen, ruta_destino, distancia, prioridad, conductor_id, vehiculo_id, fecha_inicio, fecha_fin, estado="por hacer", entrega_id=None):
+    def mutate(self, info, distancia, prioridad, conductor_id, vehiculo_id, fecha_inicio, fecha_fin, estado="por hacer", entrega_id=None):
         vehiculo = Camion.objects.get(id=vehiculo_id)
         conductor = Chofer.objects.get(id=conductor_id)  # Obtener el chofer
         entrega = Entrega.objects.get(id=entrega_id)  # Obtener la entrega relacionada
 
         ruta = Ruta.objects.create(
-            ruta_origen=ruta_origen,
-            ruta_destino=ruta_destino,
             distancia=distancia,
             prioridad=prioridad,
             conductor=conductor,  # Se asigna el conductor
@@ -51,6 +47,7 @@ class CrearRuta(graphene.Mutation):
 class Query(graphene.ObjectType):
     ruta = graphene.Field(RutaType, id=graphene.Int(required=True))
     mis_rutas = graphene.List(RutaType)
+    rutas_por_estado = graphene.List(RutaType, estado=graphene.String(required=True))
 
     def resolve_ruta(self, info, id):
         return Ruta.objects.get(id=id)
@@ -59,6 +56,11 @@ class Query(graphene.ObjectType):
         user = info.context.user
         conductor = Chofer.objects.get(usuario=user)
         return Ruta.objects.filter(conductor=conductor)
+
+    # Resolver para rutas por estado (por hacer o completada)
+    def resolve_rutas_por_estado(self, info, estado):
+        return Ruta.objects.filter(estado=estado)
+
 
 # Mutaciones disponibles en el esquema de Rutas
 class Mutation(graphene.ObjectType):
