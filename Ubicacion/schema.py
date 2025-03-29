@@ -14,11 +14,22 @@ class UbicacionType(DjangoObjectType):
 
 # Consultas
 class Query(graphene.ObjectType):
+    # Consulta para obtener todas las ubicaciones (detallada)
     ubicaciones = graphene.List(UbicacionType)
+
+    # Consulta para obtener la lista de ubicaciones en un formato adecuado para el ComboBox
+    ubicaciones_list = graphene.List(graphene.String)
 
     @login_required
     def resolve_ubicaciones(self, info):
         return Ubicacion.objects.all()
+
+    @login_required
+    def resolve_ubicaciones_list(self, info):
+        # Retorna una lista con id, ciudad y estado para el ComboBox
+        return [
+            f"{ubicacion.id}: {ubicacion.ciudad}, {ubicacion.estado}" for ubicacion in Ubicacion.objects.all()
+        ]
 
 # Mutaciones
 class CrearUbicacion(graphene.Mutation):
@@ -49,6 +60,7 @@ class CrearUbicacion(graphene.Mutation):
         latitud = Decimal(str(latitud))
         longitud = Decimal(str(longitud))
 
+        # Crear la nueva ubicación en la base de datos
         ubicacion = Ubicacion.objects.create(
             ciudad=ciudad,
             estado=estado,
@@ -57,6 +69,7 @@ class CrearUbicacion(graphene.Mutation):
         )
         return CrearUbicacion(ubicacion=ubicacion)
 
+# Definir la mutación
 class Mutation(graphene.ObjectType):
     crear_ubicacion = CrearUbicacion.Field()
 
