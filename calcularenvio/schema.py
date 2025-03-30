@@ -36,14 +36,14 @@ class CalcularEnvioType(DjangoObjectType):
 
 class Query(graphene.ObjectType):
     calcular_envio = graphene.Field(CalcularEnvioType, id=graphene.Int(required=True))
-    ultimo_calculo = graphene.Field(CalcularEnvioType)  # Nuevo campo
-
+    ultimo_calculo = graphene.Field(CalcularEnvioType)  # Nuevo campo para obtener el último cálculo
 
     def resolve_calcular_envio(self, info, id):
         return CalcularEnvio.objects.get(id=id)
+
     def resolve_ultimo_calculo(self, info):
-        # Obtener el último cálculo de envío (por ID más alto)
-        return CalcularEnvio.objects.latest('id')  # 'id' es el campo por el que se ordena, si necesitas otro criterio ajusta
+        # Obtener el último cálculo de envío (por el ID más alto)
+        return CalcularEnvio.objects.latest('id')
 
 class CrearCalcularEnvio(graphene.Mutation):
     class Arguments:
@@ -64,7 +64,7 @@ class CrearCalcularEnvio(graphene.Mutation):
     def mutate(self, info, tipo_producto_id, origen_cd_id, destino_id, peso_unitario,
                numero_piezas, dimensiones_largo, dimensiones_ancho, dimensiones_alto,
                descripcion, envio_express):
-        
+
         tipo_producto = TipoProducto.objects.get(id=tipo_producto_id)
         tarifa_base = Decimal(tipo_producto.precio_base)
 
