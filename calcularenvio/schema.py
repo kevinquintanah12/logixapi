@@ -53,7 +53,7 @@ class Query(graphene.ObjectType):
             f"Hola,\n\n"
             f"A continuación, se muestran los detalles de tu último cálculo de envío:\n"
             f"- Origen: {ultimo_calculo.origen_cd.nombre}\n"
-            f"- Destino: {ultimo_calculo.destino.nombre}\n"
+            f"- Destino: {ultimo_calculo.destino.ciudad}\n"
             f"- Peso total: {ultimo_calculo.peso_unitario * ultimo_calculo.numero_piezas} kg\n"
             f"- Distancia: {ultimo_calculo.distancia_km:.2f} km\n"
             f"- Tarifa total: ${ultimo_calculo.total_tarifa:.2f} MXN\n\n"
