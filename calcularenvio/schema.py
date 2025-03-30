@@ -7,7 +7,7 @@ from tipoproductos.models import TipoProducto, Temperatura, Humedad
 import requests
 import math
 import smtplib
-from email.message import EmailMessage
+from email.mime.text import MIMEText
 from Ubicacion.models import Ubicacion
 
 MAPBOX_ACCESS_TOKEN = "pk.eyJ1IjoiZGF5a2V2MTIiLCJhIjoiY204MTd5NzR3MGdxYTJqcGlsa29odnQ5YiJ9.tbAEt453VxfJoDatpU72YQ"
@@ -47,48 +47,145 @@ class Query(graphene.ObjectType):
         # Obtener el último cálculo de envío
         ultimo_calculo = CalcularEnvio.objects.latest('id')
         
-        # Construir el mensaje con todos los detalles solicitados
-        subject = "Detalles completos de tu último cálculo de envío"
-        body = (
-            f"Detalles de tu envío:\n\n"
-            f"Origen: {ultimo_calculo.origen_cd.nombre}\n"
-            f"Destino: {ultimo_calculo.destino.ciudad}\n"
-            f"Tarifa por Km: {ultimo_calculo.tarifa_por_km}\n"
-            f"Tarifa por Peso: {ultimo_calculo.tarifa_peso}\n"
-            f"Tarifa Base: {ultimo_calculo.tarifa_base}\n"
-            f"Tarifa Extra Temperatura: {ultimo_calculo.tarifa_extra_temperatura}\n"
-            f"Tarifa Extra Humedad: {ultimo_calculo.tarifa_extra_humedad}\n"
-            f"Traslado IVA: {ultimo_calculo.trasladoiva}\n"
-            f"IEPS: {ultimo_calculo.ieps}\n"
-            f"Total Tarifa: {ultimo_calculo.total_tarifa}\n\n"
-            f"¡Gracias por utilizar nuestro servicio!"
-        )
+        # Construir el contenido HTML del correo con una tabla de detalles
+        subject = "Cotización de Envío - Detalles de Cotización"
+        body = f"""
+        <html>
+        <head>
+            <style>
+                body {{
+                    font-family: Arial, sans-serif;
+                    background-color: #e9f7fe;
+                    margin: 0;
+                    padding: 20px;
+                }}
+                table {{
+                    width: 100%;
+                    border-collapse: collapse;
+                    margin-top: 20px;
+                }}
+                th, td {{
+                    padding: 15px 20px;
+                    text-align: left;
+                    border: 1px solid #ddd;
+                    font-size: 18px;
+                    font-weight: bold;
+                }}
+                th {{
+                    background-color: #0066cc;
+                    color: white;
+                }}
+                td {{
+                    background-color: #f2f9fc;
+                }}
+                h2 {{
+                    color: #0066cc;
+                    font-size: 24px;
+                }}
+                p {{
+                    font-size: 16px;
+                    color: #333;
+                }}
+                ul {{
+                    list-style-type: none;
+                    padding: 0;
+                }}
+                ul li {{
+                    font-size: 16px;
+                    color: #333;
+                }}
+                .footer {{
+                    margin-top: 30px;
+                    font-size: 14px;
+                    color: #666;
+                }}
+            </style>
+        </head>
+        <body>
+            <h2>Estimado cliente,</h2>
+            <p>A continuación, encontrará los detalles de su cotización de envío:</p>
+            <table>
+                <tr>
+                    <th>Concepto</th>
+                    <th>Detalle</th>
+                </tr>
+                <tr>
+                    <td>Origen</td>
+                    <td>{ultimo_calculo.origen_cd.ubicacion.ciudad}</td>
+                </tr>
+                <tr>
+                    <td>Destino</td>
+                    <td>{ultimo_calculo.destino.ciudad}</td>
+                </tr>
+                <tr>
+                    <td>Tarifa por Km</td>
+                    <td>{ultimo_calculo.tarifa_por_km}</td>
+                </tr>
+                <tr>
+                    <td>Tarifa por Peso</td>
+                    <td>{ultimo_calculo.tarifa_peso}</td>
+                </tr>
+                <tr>
+                    <td>Tarifa Base</td>
+                    <td>{ultimo_calculo.tarifa_base}</td>
+                </tr>
+                <tr>
+                    <td>Tarifa Extra Temperatura</td>
+                    <td>{ultimo_calculo.tarifa_extra_temperatura}</td>
+                </tr>
+                <tr>
+                    <td>Tarifa Extra Humedad</td>
+                    <td>{ultimo_calculo.tarifa_extra_humedad}</td>
+                </tr>
+                <tr>
+                    <td>Traslado IVA</td>
+                    <td>{ultimo_calculo.trasladoiva}</td>
+                </tr>
+                <tr>
+                    <td>IEPS</td>
+                    <td>{ultimo_calculo.ieps}</td>
+                </tr>
+                <tr>
+                    <td>Total Tarifa</td>
+                    <td>{ultimo_calculo.total_tarifa}</td>
+                </tr>
+            </table>
+            <br>
+            <p>Para cualquier duda o consulta, no dude en contactarnos:</p>
+            <ul>
+                <li>Teléfono: 2741431652</li>
+                <li>Correo: logisticlogix0@gmail.com</li>
+            </ul>
+            <p class="footer">Agradecemos su preferencia.</p>
+            <p class="footer">Atentamente,<br>Equipo Logistic Logix</p>
+        </body>
+        </html>
+        """
+
+
         
         # Configuración del remitente y credenciales del servidor SMTP
-        sender_email = "logisticlogix0@gmail.com"
-        receiver_email = "kevinquintanah12@gmail.com"
-        subject = "Asunto del correo"
-        body = "Hola"
-        app_password = "nzvi ailf xxck gctf"  # Tu contraseña de aplicación
-
-        # Crear el mensaje
-        message = MIMEText(body)
+        sender_email = "logisticlogix0@gmail.com"  # Correo de envío
+        app_password = "nzvi ailf xxck gctf"  # Contraseña o token de aplicación
+        
+        # Crear el mensaje usando MIMEText con contenido HTML
+        message = MIMEText(body, "html")
         message["Subject"] = subject
         message["From"] = sender_email
-        message["To"] = receiver_email
-
-        # Enviar el correo
+        message["To"] = email  # Se utiliza el parámetro recibido en la query
+        
         try:
+            # Conexión al servidor SMTP con SSL (Gmail)
             with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
                 server.login(sender_email, app_password)
-                server.sendmail(sender_email, receiver_email, message.as_string())
+                server.sendmail(sender_email, email, message.as_string())
                 print("Correo enviado exitosamente")
         except Exception as e:
             print(f"Error al enviar el correo: {e}")
-
         
         # Retornar el último cálculo para confirmar la operación
         return ultimo_calculo
+
 
 class CrearCalcularEnvio(graphene.Mutation):
     class Arguments:
