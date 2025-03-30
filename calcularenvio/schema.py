@@ -47,43 +47,45 @@ class Query(graphene.ObjectType):
         # Obtener el último cálculo de envío
         ultimo_calculo = CalcularEnvio.objects.latest('id')
         
-        # Construir el mensaje con detalles del envío
-        subject = "Detalles de tu último cálculo de envío"
+        # Construir el mensaje con todos los detalles solicitados
+        subject = "Detalles completos de tu último cálculo de envío"
         body = (
-            f"Hola,\n\n"
-            f"A continuación, se muestran los detalles de tu último cálculo de envío:\n"
-            f"- Origen: {ultimo_calculo.origen_cd.nombre}\n"
-            f"- Destino: {ultimo_calculo.destino.ciudad}\n"
-            f"- Peso total: {ultimo_calculo.peso_unitario * ultimo_calculo.numero_piezas} kg\n"
-            f"- Distancia: {ultimo_calculo.distancia_km:.2f} km\n"
-            f"- Tarifa total: ${ultimo_calculo.total_tarifa:.2f} MXN\n\n"
+            f"Detalles de tu envío:\n\n"
+            f"Origen: {ultimo_calculo.origen_cd.nombre}\n"
+            f"Destino: {ultimo_calculo.destino.ciudad}\n"
+            f"Tarifa por Km: {ultimo_calculo.tarifa_por_km}\n"
+            f"Tarifa por Peso: {ultimo_calculo.tarifa_peso}\n"
+            f"Tarifa Base: {ultimo_calculo.tarifa_base}\n"
+            f"Tarifa Extra Temperatura: {ultimo_calculo.tarifa_extra_temperatura}\n"
+            f"Tarifa Extra Humedad: {ultimo_calculo.tarifa_extra_humedad}\n"
+            f"Traslado IVA: {ultimo_calculo.trasladoiva}\n"
+            f"IEPS: {ultimo_calculo.ieps}\n"
+            f"Total Tarifa: {ultimo_calculo.total_tarifa}\n\n"
             f"¡Gracias por utilizar nuestro servicio!"
         )
         
         # Configuración del remitente y credenciales del servidor SMTP
-        sender_email = "kevinherreraq12@gmail.com"  # Debe ser una cuenta configurada para enviar emails
-        smtp_token = "yoaumdpvecwwxrhmyo"  # Puede ser la contraseña o token de aplicación
-        smtp_server = "smtp.gmail.com"  # Ejemplo con Gmail
-        smtp_port = 587  # Puerto para TLS
+        sender_email = "logisticlogix0@gmail.com"
+        receiver_email = "kevinquintanah12@gmail.com"
+        subject = "Asunto del correo"
+        body = "Hola"
+        app_password = "nzvi ailf xxck gctf"  # Tu contraseña de aplicación
 
-        # Construcción del email utilizando EmailMessage
-        msg = EmailMessage()
-        msg.set_content(body)
-        msg["Subject"] = subject
-        msg["From"] = sender_email
-        msg["To"] = email
+        # Crear el mensaje
+        message = MIMEText(body)
+        message["Subject"] = subject
+        message["From"] = sender_email
+        message["To"] = receiver_email
 
+        # Enviar el correo
         try:
-            # Conexión al servidor SMTP con TLS y autenticación
-            server = smtplib.SMTP(smtp_server, smtp_port)
-            server.ehlo()
-            server.starttls()
-            server.ehlo()
-            server.login(sender_email, smtp_token)
-            server.send_message(msg)
-            server.quit()
+            with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+                server.login(sender_email, app_password)
+                server.sendmail(sender_email, receiver_email, message.as_string())
+                print("Correo enviado exitosamente")
         except Exception as e:
-            raise Exception("Error enviando email: " + str(e))
+            print(f"Error al enviar el correo: {e}")
+
         
         # Retornar el último cálculo para confirmar la operación
         return ultimo_calculo
