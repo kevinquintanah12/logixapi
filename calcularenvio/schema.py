@@ -62,7 +62,7 @@ class Query(graphene.ObjectType):
         
         # Configuración del remitente y credenciales del servidor SMTP
         sender_email = "kevinherreraq12@gmail.com"  # Debe ser una cuenta configurada para enviar emails
-        smtp_token = "yoaum dpve cwwx rhmyo"  # Puede ser la contraseña o token de aplicación
+        smtp_token = "yoaumdpvecwwxrhmyo"  # Puede ser la contraseña o token de aplicación
         smtp_server = "smtp.gmail.com"  # Ejemplo con Gmail
         smtp_port = 587  # Puerto para TLS
 
