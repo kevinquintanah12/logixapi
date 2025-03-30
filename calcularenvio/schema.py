@@ -6,6 +6,7 @@ from .models import CalcularEnvio
 from tipoproductos.models import TipoProducto, Temperatura, Humedad
 import requests
 import math
+from django.core.mail import send_mail  # Importamos send_mail para enviar correos
 
 from Ubicacion.models import Ubicacion  # Ajusta el import según tu proyecto
 
@@ -16,7 +17,6 @@ class CalcularEnvioType(DjangoObjectType):
         model = CalcularEnvio
         fields = "__all__"
 
-    # Si deseas, puedes definir resolvers explícitos (opcional)
     def resolve_total_tarifa(self, info):
         return self.total_tarifa
 
@@ -31,14 +31,42 @@ class CalcularEnvioType(DjangoObjectType):
 
 class Query(graphene.ObjectType):
     calcular_envio = graphene.Field(CalcularEnvioType, id=graphene.Int(required=True))
-    ultimo_calculo = graphene.Field(CalcularEnvioType)  # Nuevo campo para obtener el último cálculo
+    ultimo_calculo = graphene.Field(CalcularEnvioType)
+    enviar_ultimo_calculo_email = graphene.Field(
+        CalcularEnvioType, email=graphene.String(required=True)
+    )
 
     def resolve_calcular_envio(self, info, id):
         return CalcularEnvio.objects.get(id=id)
 
     def resolve_ultimo_calculo(self, info):
-        # Obtener el último cálculo de envío (por el ID más alto)
         return CalcularEnvio.objects.latest('id')
+
+    @login_required
+    def resolve_enviar_ultimo_calculo_email(self, info, email):
+        # Obtener el último cálculo de envío
+        ultimo_calculo = CalcularEnvio.objects.latest('id')
+        
+        # Construcción del mensaje con detalles del envío
+        subject = "Detalles de tu último cálculo de envío"
+        message = (
+            f"Hola,\n\n"
+            f"A continuación, se muestran los detalles de tu último cálculo de envío:\n"
+            f"- Origen: {ultimo_calculo.origen_cd.nombre}\n"
+            f"- Destino: {ultimo_calculo.destino.nombre}\n"
+            f"- Peso total: {ultimo_calculo.peso_unitario * ultimo_calculo.numero_piezas} kg\n"
+            f"- Distancia: {ultimo_calculo.distancia_km:.2f} km\n"
+            f"- Tarifa total: ${ultimo_calculo.total_tarifa:.2f} MXN\n\n"
+            f"¡Gracias por utilizar nuestro servicio!"
+        )
+        sender_email = "kevin@logix.com"  # Este correo debe estar verificado en Postmark
+        recipient_list = [email]
+        
+        # Envío del correo
+        send_mail(subject, message, sender_email, recipient_list, fail_silently=False)
+        
+        # Retornar el último cálculo para confirmar la operación
+        return ultimo_calculo
 
 class CrearCalcularEnvio(graphene.Mutation):
     class Arguments:
@@ -51,7 +79,7 @@ class CrearCalcularEnvio(graphene.Mutation):
         dimensiones_ancho = graphene.Float(required=True)
         dimensiones_alto = graphene.Float(required=True)
         descripcion = graphene.String(required=True)
-        envio_express = graphene.Boolean(required=True)  # Nuevo argumento
+        envio_express = graphene.Boolean(required=True)
 
     calcular_envio = graphene.Field(CalcularEnvioType)
 
@@ -118,7 +146,6 @@ class CrearCalcularEnvio(graphene.Mutation):
         if envio_express:
             total_final += Decimal(900)  # Se suman 900 pesos si es express
 
-        # Asignamos usando los nombres de campo del modelo
         calcular_envio.tarifa_por_km = tarifa_por_km
         calcular_envio.tarifa_peso = tarifa_por_peso
         calcular_envio.distancia_km = Decimal(distance_km)

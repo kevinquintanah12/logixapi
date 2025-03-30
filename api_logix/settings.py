@@ -29,6 +29,14 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 #SECRET_KEY = 'g5-d9tal65cre4wr*oohe1t*c-9d!)9^tqcj-wiz7u_3ynj9vn'
 SECRET_KEY = os.environ.get('SECRET_KEY', default='your secret key')
 
+EMAIL_BACKEND = "anymail.backends.postmark.EmailBackend"
+ANYMAIL = {
+    "POSTMARK_SERVER_TOKEN": "2bc3f754-5bc5-459e-b099-93ae91d99266",
+}
+EMAIL_HOST = "smtp.postmarkapp.com"
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+DEFAULT_FROM_EMAIL = "kevin@logix.com"  # Debe ser el correo verificado en Postmark
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
