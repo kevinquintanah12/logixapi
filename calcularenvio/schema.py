@@ -12,26 +12,21 @@ from Ubicacion.models import Ubicacion  # Ajusta el import según tu proyecto
 MAPBOX_ACCESS_TOKEN = "pk.eyJ1IjoiZGF5a2V2MTIiLCJhIjoiY204MTd5NzR3MGdxYTJqcGlsa29odnQ5YiJ9.tbAEt453VxfJoDatpU72YQ"
 
 class CalcularEnvioType(DjangoObjectType):
-    descripcion = graphene.String()
-    totalTarifa = graphene.Decimal()
-    tarifaKm = graphene.Decimal()
-    tarifaPeso = graphene.Decimal()
-    distanciaKm = graphene.Decimal()
-
     class Meta:
         model = CalcularEnvio
         fields = "__all__"
 
-    def resolve_totalTarifa(self, info):
+    # Si deseas, puedes definir resolvers explícitos (opcional)
+    def resolve_total_tarifa(self, info):
         return self.total_tarifa
 
-    def resolve_tarifaKm(self, info):
-        return self.tarifa_km
+    def resolve_tarifa_por_km(self, info):
+        return self.tarifa_por_km
 
-    def resolve_tarifaPeso(self, info):
+    def resolve_tarifa_peso(self, info):
         return self.tarifa_peso
 
-    def resolve_distanciaKm(self, info):
+    def resolve_distancia_km(self, info):
         return self.distancia_km
 
 class Query(graphene.ObjectType):
@@ -93,7 +88,8 @@ class CrearCalcularEnvio(graphene.Mutation):
             tarifa_extra_humedad=tarifa_extra_humedad,
             trasladoiva=Decimal(0),
             ieps=Decimal(0),
-            descripcion=descripcion
+            descripcion=descripcion,
+            envio_express=envio_express
         )
 
         url = (
@@ -113,20 +109,17 @@ class CrearCalcularEnvio(graphene.Mutation):
 
         tramos = math.ceil(distance_km / 30)
         tarifa_por_km = Decimal(tramos * 4)
-
         tarifa_por_peso = Decimal(peso_unitario * numero_piezas) * Decimal(5)
-
         subtotal = tarifa_base + tarifa_extra_temperatura + tarifa_extra_humedad + tarifa_por_km + tarifa_por_peso
-
         iva_calculado = subtotal * Decimal('0.10')
         ieps_calculado = subtotal * Decimal('0.10')
-
         total_final = subtotal + iva_calculado + ieps_calculado
 
         if envio_express:
             total_final += Decimal(900)  # Se suman 900 pesos si es express
 
-        calcular_envio.tarifa_km = tarifa_por_km
+        # Asignamos usando los nombres de campo del modelo
+        calcular_envio.tarifa_por_km = tarifa_por_km
         calcular_envio.tarifa_peso = tarifa_por_peso
         calcular_envio.distancia_km = Decimal(distance_km)
         calcular_envio.trasladoiva = iva_calculado
