@@ -6,9 +6,9 @@ from .models import CalcularEnvio
 from tipoproductos.models import TipoProducto, Temperatura, Humedad
 import requests
 import math
-from django.core.mail import send_mail  # Importamos send_mail para enviar correos
-
-from Ubicacion.models import Ubicacion  # Ajusta el import según tu proyecto
+import smtplib
+from email.message import EmailMessage
+from Ubicacion.models import Ubicacion
 
 MAPBOX_ACCESS_TOKEN = "pk.eyJ1IjoiZGF5a2V2MTIiLCJhIjoiY204MTd5NzR3MGdxYTJqcGlsa29odnQ5YiJ9.tbAEt453VxfJoDatpU72YQ"
 
@@ -47,9 +47,9 @@ class Query(graphene.ObjectType):
         # Obtener el último cálculo de envío
         ultimo_calculo = CalcularEnvio.objects.latest('id')
         
-        # Construcción del mensaje con detalles del envío
+        # Construir el mensaje con detalles del envío
         subject = "Detalles de tu último cálculo de envío"
-        message = (
+        body = (
             f"Hola,\n\n"
             f"A continuación, se muestran los detalles de tu último cálculo de envío:\n"
             f"- Origen: {ultimo_calculo.origen_cd.nombre}\n"
@@ -59,11 +59,31 @@ class Query(graphene.ObjectType):
             f"- Tarifa total: ${ultimo_calculo.total_tarifa:.2f} MXN\n\n"
             f"¡Gracias por utilizar nuestro servicio!"
         )
-        sender_email = "kevin@logix.com"  # Este correo debe estar verificado en Postmark
-        recipient_list = [email]
         
-        # Envío del correo
-        send_mail(subject, message, sender_email, recipient_list, fail_silently=False)
+        # Configuración del remitente y credenciales del servidor SMTP
+        sender_email = "kevinherreraq12@gmail.com"  # Debe ser una cuenta configurada para enviar emails
+        smtp_token = "yoaum dpve cwwx rhmyo"  # Puede ser la contraseña o token de aplicación
+        smtp_server = "smtp.gmail.com"  # Ejemplo con Gmail
+        smtp_port = 587  # Puerto para TLS
+
+        # Construcción del email utilizando EmailMessage
+        msg = EmailMessage()
+        msg.set_content(body)
+        msg["Subject"] = subject
+        msg["From"] = sender_email
+        msg["To"] = email
+
+        try:
+            # Conexión al servidor SMTP con TLS y autenticación
+            server = smtplib.SMTP(smtp_server, smtp_port)
+            server.ehlo()
+            server.starttls()
+            server.ehlo()
+            server.login(sender_email, smtp_token)
+            server.send_message(msg)
+            server.quit()
+        except Exception as e:
+            raise Exception("Error enviando email: " + str(e))
         
         # Retornar el último cálculo para confirmar la operación
         return ultimo_calculo
