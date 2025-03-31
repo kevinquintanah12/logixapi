@@ -5,19 +5,19 @@ from destinatario.models import Destinatario
 from cliente.models import Cliente
 from calcularenvio.models import CalcularEnvio
 
-# Definir el tipo de GraphQL para el modelo Producto
+# Tipo GraphQL para el modelo Producto
 class ProductoType(DjangoObjectType):
     class Meta:
         model = Producto
-        fields = "__all__"  # O puedes especificar los campos que deseas exponer
+        fields = "__all__"  # Puedes especificar los campos que deseas exponer
 
-# Definir la mutación para crear un producto
+# Mutación para crear un producto
 class CrearProducto(graphene.Mutation):
     class Arguments:
         description = graphene.String(required=True)
         codigosat = graphene.String(required=True)
         noidentificacion = graphene.String(required=True)
-        codigobarras = graphene.String()  # Este es opcional, ya que puede ser null
+        codigobarras = graphene.String()  # Opcional, puede ser null
         destinatario_id = graphene.Int(required=True)
         cliente_id = graphene.Int(required=True)
         calculoenvio_id = graphene.Int(required=True)
@@ -46,9 +46,14 @@ class CrearProducto(graphene.Mutation):
 # Definir las consultas disponibles en GraphQL
 class Query(graphene.ObjectType):
     producto = graphene.Field(ProductoType, id=graphene.Int(required=True))
+    ultimo_producto = graphene.Field(ProductoType)  # Nueva consulta para obtener el último producto creado
 
     def resolve_producto(self, info, id):
         return Producto.objects.get(id=id)
+
+    def resolve_ultimo_producto(self, info):
+        # Se asume que 'id' se incrementa de forma ascendente
+        return Producto.objects.latest("id")
 
 # Definir las mutaciones disponibles en GraphQL
 class Mutation(graphene.ObjectType):
