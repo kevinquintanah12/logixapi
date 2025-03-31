@@ -11,9 +11,13 @@ class ClienteType(DjangoObjectType):
 # Consultas para Cliente
 class Query(graphene.ObjectType):
     cliente = graphene.Field(ClienteType, id=graphene.Int(required=True))
+    ultimo_cliente = graphene.Field(ClienteType)
 
     def resolve_cliente(self, info, id):
         return Cliente.objects.get(id=id)
+    
+    def resolve_ultimo_cliente(self, info):
+        return Cliente.objects.order_by('-id').first()
 
 # Mutaciones para Cliente
 class CrearCliente(graphene.Mutation):

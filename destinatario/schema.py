@@ -12,12 +12,16 @@ class DestinatarioType(DjangoObjectType):
 class Query(graphene.ObjectType):
     destinatario = graphene.Field(DestinatarioType, id=graphene.Int(required=True))
     todos_los_destinatarios = graphene.List(DestinatarioType)
+    ultimo_destinatario = graphene.Field(DestinatarioType)
 
     def resolve_destinatario(self, info, id):
         return Destinatario.objects.get(id=id)
 
     def resolve_todos_los_destinatarios(self, info):
         return Destinatario.objects.all()
+
+    def resolve_ultimo_destinatario(self, info):
+        return Destinatario.objects.order_by('-id').first()
 
 # Mutación para crear un destinatario
 class CrearDestinatario(graphene.Mutation):
