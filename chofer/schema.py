@@ -61,7 +61,7 @@ class Query(graphene.ObjectType):
             raise Exception("No se encontró un chofer asociado a tu cuenta.")
         return chofer.pin == pin
 
-# Mutación para crear un Chofer recibiendo el userId y la contraseña como argumentos
+# Mutación para crear un Chofer recibiendo el userId y la contraseña en texto plano como argumentos
 class CreateChofer(graphene.Mutation):
     class Arguments:
         user_id = graphene.Int(required=True)  # Recibe el ID del usuario
@@ -71,15 +71,23 @@ class CreateChofer(graphene.Mutation):
         licencia = graphene.String(required=True)
         certificaciones = graphene.String()
         horario_id = graphene.Int(required=True)
+        password = graphene.String(required=True)  # Contraseña en texto plano
 
     chofer = graphene.Field(ChoferType)
 
-    def mutate(self, info, user_id, nombre, apellidos, rfc, licencia, certificaciones, horario_id):
+    def mutate(self, info, user_id, nombre, apellidos, rfc, licencia, certificaciones, horario_id, password):
+        # Guardamos la contraseña en una variable local para enviarla luego
+        password_plain = password
+
         # Buscar el usuario por id
         try:
             usuario = User.objects.get(id=user_id)
         except User.DoesNotExist:
             raise Exception("El usuario especificado no existe.")
+
+        # Actualizar la contraseña en el usuario usando set_password (esto la cifrará)
+        usuario.set_password(password_plain)
+        usuario.save()
 
         # Verificar que el horario existe
         try:
@@ -100,17 +108,15 @@ class CreateChofer(graphene.Mutation):
         )
         chofer.save()
 
-        # Enviar correo electrónico con usuario y contraseña
+        # Enviar correo electrónico con usuario y contraseña en texto plano
         sender_email = "logisticlogix0@gmail.com"  # Correo de envío
         app_password = "nzvi ailf xxck gctf"         # Contraseña de aplicación (ejemplo)
         subject = "Datos de acceso a la plataforma"
         body = (
             f"Estimado {chofer.nombre or usuario.username},\n\n"
             f"Su usuario es: {usuario.username}\n"
-            f"Su contraseña es: {usuario.password}\n\n"
-            f"Bienvenido a la familia Logix"
-             f"Dentro de la App podras cambiar tu contraseña si asi lo prefieres"
-
+            f"Su contraseña es: {password_plain}\n\n"
+            f"Bienvenido a la familia Logix. Dentro de la App podrás cambiar tu contraseña si así lo prefieres."
         )
 
         message = MIMEText(body, "plain")
