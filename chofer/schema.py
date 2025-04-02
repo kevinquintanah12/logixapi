@@ -59,9 +59,10 @@ class Query(graphene.ObjectType):
         # Compara el PIN ingresado con el almacenado en el chofer
         return chofer.pin == pin
 
-# Mutación para crear un Chofer
+# Mutación para crear un Chofer recibiendo el userId como argumento
 class CreateChofer(graphene.Mutation):
     class Arguments:
+        user_id = graphene.Int(required=True)  # Se añade userId como argumento
         nombre = graphene.String(required=True)
         apellidos = graphene.String(required=True)
         rfc = graphene.String(required=True)
@@ -71,20 +72,24 @@ class CreateChofer(graphene.Mutation):
 
     chofer = graphene.Field(ChoferType)
 
-    def mutate(self, info, nombre, apellidos, rfc, licencia, certificaciones, horario_id):
-        user = info.context.user
-        if not user.is_authenticated:
-            raise Exception("Debes estar autenticado para crear un chofer.")
+    def mutate(self, info, user_id, nombre, apellidos, rfc, licencia, certificaciones, horario_id):
+        # Buscar el usuario por id
+        try:
+            usuario = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            raise Exception("El usuario especificado no existe.")
 
+        # Verificar que el horario existe
         try:
             horario = Horario.objects.get(id=horario_id)
         except Horario.DoesNotExist:
             raise Exception("El horario especificado no existe.")
 
+        # Crear el chofer asignándole el usuario encontrado
         chofer = Chofer(
             nombre=nombre,
             apellidos=apellidos,
-            usuario=user,
+            usuario=usuario,
             rfc=rfc,
             licencia=licencia,
             certificaciones=certificaciones,
