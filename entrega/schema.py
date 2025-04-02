@@ -15,7 +15,6 @@ class EntregaType(DjangoObjectType):
 class CrearEntrega(graphene.Mutation):
     class Arguments:
         paquete_id = graphene.Int(required=True)
-        destinatario_id = graphene.Int()
         fecha_entrega = graphene.DateTime(required=True)
         estado = graphene.String(required=True)
         pin = graphene.String(required=True)
@@ -24,12 +23,10 @@ class CrearEntrega(graphene.Mutation):
 
     def mutate(self, info, paquete_id, fecha_entrega, estado, pin, destinatario_id=None):
         paquete = Paquete.objects.get(id=paquete_id)
-        destinatario = Destinatario.objects.get(id=destinatario_id) if destinatario_id else None
 
         # Crear la entrega sin asignar ruta (ruta queda null)
         entrega = Entrega.objects.create(
             paquete=paquete,
-            destinatario=destinatario,
             fecha_entrega=fecha_entrega,
             estado=estado,
             pin=pin,

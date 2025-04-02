@@ -31,7 +31,6 @@ class CrearDestinatario(graphene.Mutation):
         apellidos = graphene.String(required=True)
         correo_electronico = graphene.String()
         telefono = graphene.String()
-        pin = graphene.String()
         direccion_detallada = graphene.String(required=True)
         calle = graphene.String(required=True)
         colonia = graphene.String(required=True)

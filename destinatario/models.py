@@ -7,7 +7,6 @@ class Destinatario(models.Model):
     apellidos = models.CharField(max_length=255)
     correo_electronico = models.CharField(max_length=255, null=True, blank=True)
     telefono = models.CharField(max_length=20, null=True, blank=True)
-    pin = models.CharField(max_length=6, null=True, blank=True)
     direccion_detallada = models.TextField()
     calle = models.CharField(max_length=255)
     colonia = models.CharField(max_length=255)
