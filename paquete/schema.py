@@ -2,15 +2,32 @@ import graphene
 from graphene_django.types import DjangoObjectType
 from email.mime.text import MIMEText
 import smtplib
+import datetime
 
 from .models import Paquete
 from producto.models import Producto  # Asegúrate de que esté importado correctamente
 
-# Tipo GraphQL para el modelo Paquete
+# Tipo GraphQL para el modelo Paquete, con un campo calculado para la fecha estimada de entrega
 class PaqueteType(DjangoObjectType):
+    fecha_estimada_entrega = graphene.DateTime()
+
     class Meta:
         model = Paquete
         fields = "__all__"
+
+    def resolve_fecha_estimada_entrega(self, info):
+        # Usamos "fecha_registro" como fecha de creación
+        created = self.fecha_registro
+        # Se accede al cálculo de envío a través del producto relacionado.
+        # Se espera que self.producto.calculoenvio tenga los campos "envioExpress" y "distanciaKm"
+        envio_express = self.producto.calculoenvio.envioExpress
+        distancia = float(self.producto.calculoenvio.distanciaKm)
+        # Si es envío express se entrega el mismo día; de lo contrario, se entrega al siguiente día.
+        # Opcionalmente, podrías usar la distancia para algún cálculo adicional.
+        if envio_express:
+            return created
+        else:
+            return created + datetime.timedelta(days=1)
 
 # Mutación para crear un paquete a partir de un producto
 class CrearPaquete(graphene.Mutation):
@@ -22,7 +39,7 @@ class CrearPaquete(graphene.Mutation):
     def mutate(self, info, producto_id):
         # Obtener el producto relacionado por su ID
         producto = Producto.objects.get(id=producto_id)
-        # Crear el paquete con el producto relacionado, el número de guía se genera automáticamente
+        # Crear el paquete con el producto relacionado; se asume que al crearse se asigna un número de guía automáticamente
         paquete = Paquete.objects.create(producto=producto)
         return CrearPaquete(paquete=paquete)
 
@@ -78,12 +95,20 @@ class EnviarGuiaEmail(graphene.Mutation):
 
         return EnviarGuiaEmail(success=success, paquete=paquete)
 
-# Query para obtener un paquete por ID
+# Query para obtener paquetes
 class Query(graphene.ObjectType):
     paquete = graphene.Field(PaqueteType, id=graphene.Int(required=True))
+    paquetes = graphene.List(PaqueteType)
+    ultimo_paquete = graphene.Field(PaqueteType)
 
     def resolve_paquete(self, info, id):
         return Paquete.objects.get(id=id)
+
+    def resolve_paquetes(self, info):
+        return Paquete.objects.all()
+
+    def resolve_ultimo_paquete(self, info):
+        return Paquete.objects.last()
 
 # Mutaciones disponibles
 class Mutation(graphene.ObjectType):
