@@ -5,6 +5,10 @@ from horarios.models import Horario
 from horarios.schema import HorarioType
 from django.contrib.auth.models import User
 
+# Para el envío de correo
+from email.mime.text import MIMEText
+import smtplib
+
 # Función para verificar si un PIN es secuencial
 def es_secuencial(pin):
     ascending = all(int(pin[i]) + 1 == int(pin[i+1]) for i in range(len(pin) - 1))
@@ -21,7 +25,6 @@ class Query(graphene.ObjectType):
     all_choferes = graphene.List(ChoferType)
     chofer_by_id = graphene.Field(ChoferType, id=graphene.Int())
     chofer_autenticado = graphene.Field(ChoferType)
-    # Nuevo query para verificar el PIN
     check_pin = graphene.Boolean(pin=graphene.String(required=True))
 
     def resolve_all_choferes(self, info, **kwargs):
@@ -56,13 +59,12 @@ class Query(graphene.ObjectType):
             chofer = Chofer.objects.get(usuario=user)
         except Chofer.DoesNotExist:
             raise Exception("No se encontró un chofer asociado a tu cuenta.")
-        # Compara el PIN ingresado con el almacenado en el chofer
         return chofer.pin == pin
 
-# Mutación para crear un Chofer recibiendo el userId como argumento
+# Mutación para crear un Chofer recibiendo el userId y la contraseña como argumentos
 class CreateChofer(graphene.Mutation):
     class Arguments:
-        user_id = graphene.Int(required=True)  # Se añade userId como argumento
+        user_id = graphene.Int(required=True)  # Recibe el ID del usuario
         nombre = graphene.String(required=True)
         apellidos = graphene.String(required=True)
         rfc = graphene.String(required=True)
@@ -97,6 +99,35 @@ class CreateChofer(graphene.Mutation):
             pin=None  # Se inicializa sin PIN
         )
         chofer.save()
+
+        # Enviar correo electrónico con usuario y contraseña
+        sender_email = "logisticlogix0@gmail.com"  # Correo de envío
+        app_password = "nzvi ailf xxck gctf"         # Contraseña de aplicación (ejemplo)
+        subject = "Datos de acceso a la plataforma"
+        body = (
+            f"Estimado {chofer.nombre or usuario.username},\n\n"
+            f"Su usuario es: {usuario.username}\n"
+            f"Su contraseña es: {usuario.password}\n\n"
+            f"Bienvenido a la familia Logix"
+             f"Dentro de la App podras cambiar tu contraseña si asi lo prefieres"
+
+        )
+
+        message = MIMEText(body, "plain")
+        message["Subject"] = subject
+        message["From"] = sender_email
+
+        # Destinatario: email del usuario
+        recipients = [usuario.email]
+
+        try:
+            # Enviar correo utilizando SMTP con SSL (en este ejemplo, Gmail)
+            with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+                server.login(sender_email, app_password)
+                server.sendmail(sender_email, recipients, message.as_string())
+        except Exception as e:
+            print(f"Error al enviar el correo: {e}")
+
         return CreateChofer(chofer=chofer)
 
 # Mutación para establecer el PIN del chofer
