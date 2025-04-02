@@ -8,15 +8,21 @@ class CamionType(DjangoObjectType):
         model = Camion
         fields = "__all__"
 
-# Query para obtener un camion por ID
+# Query para obtener un camión por ID y todos los camiones
 class Query(graphene.ObjectType):
     camion = graphene.Field(CamionType, id=graphene.Int(required=True))
+    camiones = graphene.List(CamionType)  # Nueva consulta para obtener todos los camiones
 
     def resolve_camion(self, info, id):
-        # Obtener el camion por ID
-        return Camion.objects.get(id=id)
+        try:
+            return Camion.objects.get(id=id)
+        except Camion.DoesNotExist:
+            return None  # Manejo de error si el camión no existe
 
-# Mutación para crear un camion
+    def resolve_camiones(self, info):
+        return Camion.objects.all()  # Retorna todos los camiones
+
+# Mutación para crear un camión
 class CrearCamion(graphene.Mutation):
     class Arguments:
         matricula = graphene.String(required=True)
@@ -29,7 +35,6 @@ class CrearCamion(graphene.Mutation):
     camion = graphene.Field(CamionType)
 
     def mutate(self, info, matricula, marca, modelo, capacidad_carga, tipo_vehiculo, cumplimiento_normas):
-        # Crear el camion
         camion = Camion.objects.create(
             matricula=matricula,
             marca=marca,
@@ -38,12 +43,11 @@ class CrearCamion(graphene.Mutation):
             tipo_vehiculo=tipo_vehiculo,
             cumplimiento_normas=cumplimiento_normas
         )
-
         return CrearCamion(camion=camion)
 
 # Mutaciones disponibles
 class Mutation(graphene.ObjectType):
-    crear_camion = CrearCamion.Field()  # Mutación para crear un camion
+    crear_camion = CrearCamion.Field()  # Mutación para crear un camión
 
 # Esquema final
 schema = graphene.Schema(query=Query, mutation=Mutation)
