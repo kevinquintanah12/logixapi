@@ -16,23 +16,20 @@ class CrearEntrega(graphene.Mutation):
     class Arguments:
         paquete_id = graphene.Int(required=True)
         destinatario_id = graphene.Int()
-        cd_destino_id = graphene.Int()
         fecha_entrega = graphene.DateTime(required=True)
         estado = graphene.String(required=True)
         pin = graphene.String(required=True)
 
     entrega = graphene.Field(EntregaType)
 
-    def mutate(self, info, paquete_id, fecha_entrega, estado, pin, destinatario_id=None, cd_destino_id=None):
+    def mutate(self, info, paquete_id, fecha_entrega, estado, pin, destinatario_id=None):
         paquete = Paquete.objects.get(id=paquete_id)
         destinatario = Destinatario.objects.get(id=destinatario_id) if destinatario_id else None
-        cd_destino = CentroDistribucion.objects.get(id=cd_destino_id) if cd_destino_id else None
 
         # Crear la entrega sin asignar ruta (ruta queda null)
         entrega = Entrega.objects.create(
             paquete=paquete,
             destinatario=destinatario,
-            cd_destino=cd_destino,
             fecha_entrega=fecha_entrega,
             estado=estado,
             pin=pin,
