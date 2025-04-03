@@ -21,7 +21,7 @@ class CrearEntrega(graphene.Mutation):
 
     entrega = graphene.Field(EntregaType)
 
-    def mutate(self, info, paquete_id, fecha_entrega, estado, pin, destinatario_id=None):
+    def mutate(self, info, paquete_id, fecha_entrega, estado, pin):
         paquete = Paquete.objects.get(id=paquete_id)
 
         # Crear la entrega sin asignar ruta (ruta queda null)
@@ -50,13 +50,19 @@ class ActualizarEstadoEntrega(graphene.Mutation):
 # Queries para obtener entregas
 class Query(graphene.ObjectType):
     entrega = graphene.Field(EntregaType, id=graphene.Int(required=True))
+    entrega_por_guia = graphene.Field(EntregaType, numero_guia=graphene.String(required=True))
     entregas_por_estado = graphene.List(EntregaType, estado=graphene.String(required=True))
     entregas_por_paquete = graphene.List(EntregaType, paquete_id=graphene.Int(required=True))
     entregas_por_fecha = graphene.List(EntregaType, fecha_entrega=graphene.DateTime(required=True))
-    entregas_por_ciudad_estado = graphene.List(EntregaType, ciudad=graphene.String(required=True), estado=graphene.String(required=True))
+    entregas_por_ciudad_estado = graphene.List(
+        EntregaType, ciudad=graphene.String(required=True), estado=graphene.String(required=True)
+    )
 
     def resolve_entrega(self, info, id):
         return Entrega.objects.get(id=id)
+
+    def resolve_entrega_por_guia(self, info, numero_guia):
+        return Entrega.objects.get(paquete__numero_guia=numero_guia)
 
     def resolve_entregas_por_estado(self, info, estado):
         return Entrega.objects.filter(estado=estado)
@@ -75,4 +81,5 @@ class Mutation(graphene.ObjectType):
     crear_entrega = CrearEntrega.Field()
     actualizar_estado_entrega = ActualizarEstadoEntrega.Field()
 
+# Esquema GraphQL
 schema = graphene.Schema(query=Query, mutation=Mutation)
