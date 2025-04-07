@@ -33,19 +33,28 @@ class CrearEntrega(graphene.Mutation):
         )
         return CrearEntrega(entrega=entrega)
 
-# Mutación para actualizar el estado de una entrega
-class ActualizarEstadoEntrega(graphene.Mutation):
+# Mutación para finalizar la entrega validando el PIN y actualizando el estado
+class FinalizarEntrega(graphene.Mutation):
     class Arguments:
         entrega_id = graphene.Int(required=True)
-        estado = graphene.String(required=True)
+        pin = graphene.String(required=True)  # PIN ingresado por el cliente
+        estado = graphene.String(required=True)  # Nuevo estado a asignar
 
     entrega = graphene.Field(EntregaType)
+    error = graphene.String()
 
-    def mutate(self, info, entrega_id, estado):
+    def mutate(self, info, entrega_id, pin, estado):
         entrega = Entrega.objects.get(id=entrega_id)
+        
+        # Validar que el PIN ingresado coincida con el de la entrega
+        if entrega.pin != pin:
+            return FinalizarEntrega(error="PIN incorrecto")
+        
+        # Si el PIN es correcto, actualizar el estado de la entrega al estado proporcionado
         entrega.estado = estado
         entrega.save()
-        return ActualizarEstadoEntrega(entrega=entrega)
+        
+        return FinalizarEntrega(entrega=entrega)
 
 # Queries para obtener entregas
 class Query(graphene.ObjectType):
@@ -79,7 +88,7 @@ class Query(graphene.ObjectType):
 # Mutaciones disponibles en el esquema de Entregas
 class Mutation(graphene.ObjectType):
     crear_entrega = CrearEntrega.Field()
-    actualizar_estado_entrega = ActualizarEstadoEntrega.Field()
+    finalizar_entrega = FinalizarEntrega.Field()  # Mutación actualizada
 
 # Esquema GraphQL
 schema = graphene.Schema(query=Query, mutation=Mutation)
