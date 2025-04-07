@@ -1,9 +1,10 @@
 import graphene
 from graphene_django.types import DjangoObjectType
 from .models import Entrega
-from destinatario.models import Destinatario
-from centrodistribucion.models import CentroDistribucion
 from paquete.models import Paquete
+from django.contrib.auth import get_user_model
+
+User = get_user_model()
 
 # Tipo GraphQL para Entrega
 class EntregaType(DjangoObjectType):
@@ -23,13 +24,15 @@ class CrearEntrega(graphene.Mutation):
 
     def mutate(self, info, paquete_id, fecha_entrega, estado, pin):
         paquete = Paquete.objects.get(id=paquete_id)
+        user = info.context.user
 
-        # Crear la entrega sin asignar ruta (ruta queda null)
+        # Crear la entrega y asignarla al chofer actual (si está autenticado)
         entrega = Entrega.objects.create(
             paquete=paquete,
             fecha_entrega=fecha_entrega,
             estado=estado,
             pin=pin,
+            chofer=user if user.is_authenticated else None,
         )
         return CrearEntrega(entrega=entrega)
 
@@ -37,8 +40,8 @@ class CrearEntrega(graphene.Mutation):
 class FinalizarEntrega(graphene.Mutation):
     class Arguments:
         entrega_id = graphene.Int(required=True)
-        pin = graphene.String(required=True)  # PIN ingresado por el cliente
-        estado = graphene.String(required=True)  # Nuevo estado a asignar
+        pin = graphene.String(required=True)
+        estado = graphene.String(required=True)
 
     entrega = graphene.Field(EntregaType)
     error = graphene.String()
@@ -46,14 +49,12 @@ class FinalizarEntrega(graphene.Mutation):
     def mutate(self, info, entrega_id, pin, estado):
         entrega = Entrega.objects.get(id=entrega_id)
         
-        # Validar que el PIN ingresado coincida con el de la entrega
         if entrega.pin != pin:
             return FinalizarEntrega(error="PIN incorrecto")
-        
-        # Si el PIN es correcto, actualizar el estado de la entrega al estado proporcionado
+
         entrega.estado = estado
         entrega.save()
-        
+
         return FinalizarEntrega(entrega=entrega)
 
 # Queries para obtener entregas
@@ -66,6 +67,7 @@ class Query(graphene.ObjectType):
     entregas_por_ciudad_estado = graphene.List(
         EntregaType, ciudad=graphene.String(required=True), estado=graphene.String(required=True)
     )
+    mis_entregas_en_proceso = graphene.List(EntregaType)
 
     def resolve_entrega(self, info, id):
         return Entrega.objects.get(id=id)
@@ -85,10 +87,18 @@ class Query(graphene.ObjectType):
     def resolve_entregas_por_ciudad_estado(self, info, ciudad, estado):
         return Entrega.objects.filter(destinatario__ciudad=ciudad, destinatario__estado=estado)
 
+    def resolve_mis_entregas_en_proceso(self, info):
+        user = info.context.user
+
+        if user.is_anonymous:
+            raise Exception("No autenticado")
+
+        return Entrega.objects.filter(estado="En proceso", chofer=user)
+
 # Mutaciones disponibles en el esquema de Entregas
 class Mutation(graphene.ObjectType):
     crear_entrega = CrearEntrega.Field()
-    finalizar_entrega = FinalizarEntrega.Field()  # Mutación actualizada
+    finalizar_entrega = FinalizarEntrega.Field()
 
 # Esquema GraphQL
 schema = graphene.Schema(query=Query, mutation=Mutation)
