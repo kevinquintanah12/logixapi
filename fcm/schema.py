@@ -8,6 +8,16 @@ class FCMDeviceType(DjangoObjectType):
         model = FCMDevice
         fields = ('id', 'token', 'created_at')
 
+# Definir una Query si se requiere
+class Query(graphene.ObjectType):
+    fcm_devices = graphene.List(FCMDeviceType)
+
+    @login_required
+    def resolve_fcm_devices(self, info):
+        user = info.context.user
+        return FCMDevice.objects.filter(user=user)
+
+# Mutación para guardar o actualizar el token FCM
 class GuardarTokenFCM(graphene.Mutation):
     class Arguments:
         token = graphene.String(required=True)
@@ -17,15 +27,15 @@ class GuardarTokenFCM(graphene.Mutation):
     @login_required
     def mutate(self, info, token):
         user = info.context.user
-
-        # Reemplazar o crear token
         FCMDevice.objects.update_or_create(
             user=user,
-            token=token,
             defaults={'token': token},
         )
-
         return GuardarTokenFCM(ok=True)
 
-class FCMMutation(graphene.ObjectType):
+# Renombramos FCMMutation a Mutation para que sea accesible como se espera
+class Mutation(graphene.ObjectType):
     guardar_token_fcm = GuardarTokenFCM.Field()
+
+# Finalmente, definimos el esquema que integre Query y Mutation
+schema = graphene.Schema(query=Query, mutation=Mutation)
