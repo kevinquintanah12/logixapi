@@ -73,6 +73,8 @@ INSTALLED_APPS = [
     'entrega',
     'camiones',
     'rutas',
+    'fcm',
+    'sensoresRuta',
 
     'corsheaders',
 

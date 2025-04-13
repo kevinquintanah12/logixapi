@@ -163,14 +163,15 @@ class SetChoferPin(graphene.Mutation):
         chofer.save()
         return SetChoferPin(chofer=chofer)
 
-# Mutación para actualizar el PIN del chofer
+# Mutación para actualizar el PIN del chofer validando el PIN actual
 class UpdateChoferPin(graphene.Mutation):
     class Arguments:
-        pin = graphene.String(required=True)
+        old_pin = graphene.String(required=True)
+        new_pin = graphene.String(required=True)
 
     chofer = graphene.Field(ChoferType)
 
-    def mutate(self, info, pin):
+    def mutate(self, info, old_pin, new_pin):
         user = info.context.user
         if not user.is_authenticated:
             raise Exception("Debes estar autenticado para editar el PIN.")
@@ -180,13 +181,19 @@ class UpdateChoferPin(graphene.Mutation):
         except Chofer.DoesNotExist:
             raise Exception("No tienes permiso para editar el PIN.")
 
-        if not pin.isdigit() or len(pin) != 4:
-            raise Exception("El PIN debe contener exactamente 4 dígitos numéricos.")
+        # Verificar que el PIN actual coincide
+        if chofer.pin != old_pin:
+            raise Exception("El PIN actual no coincide.")
 
-        if es_secuencial(pin):
-            raise Exception("El PIN no puede ser una secuencia numérica.")
+        # Validar que el nuevo PIN tenga 4 dígitos numéricos
+        if not new_pin.isdigit() or len(new_pin) != 4:
+            raise Exception("El nuevo PIN debe contener exactamente 4 dígitos numéricos.")
 
-        chofer.pin = pin
+        # Evitar que el nuevo PIN sea una secuencia numérica
+        if es_secuencial(new_pin):
+            raise Exception("El nuevo PIN no puede ser una secuencia numérica.")
+
+        chofer.pin = new_pin
         chofer.save()
         return UpdateChoferPin(chofer=chofer)
 

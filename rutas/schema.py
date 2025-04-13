@@ -6,13 +6,17 @@ from camiones.models import Camion
 from entrega.models import Entrega
 from paquete.models import Paquete  # Importamos Paquete
 
+# Importamos la función que envía notificaciones
+from fcm.firebase_config import enviar_notificacion_fcm_v1
+from fcm.models import FCMDevice  # Modelo donde se guarda el token FCM
+
 # Tipo GraphQL para Ruta
 class RutaType(DjangoObjectType):
     class Meta:
         model = Ruta
         fields = "__all__"
 
-# Mutación para crear una ruta
+# Mutación para crear una ruta y notificar al chofer
 class CrearRuta(graphene.Mutation):
     class Arguments:
         distancia = graphene.Float(required=True)
@@ -27,10 +31,12 @@ class CrearRuta(graphene.Mutation):
     ruta = graphene.Field(RutaType)
 
     def mutate(self, info, distancia, prioridad, conductor_id, vehiculo_id, fecha_inicio, fecha_fin, estado, entrega_id):
+        # Obtener instancias de los modelos relacionados
         vehiculo = Camion.objects.get(id=vehiculo_id)
         conductor = Chofer.objects.get(id=conductor_id)
         entrega = Entrega.objects.get(id=entrega_id)
 
+        # Crear la ruta
         ruta = Ruta.objects.create(
             distancia=distancia,
             prioridad=prioridad,
@@ -41,8 +47,20 @@ class CrearRuta(graphene.Mutation):
             estado=estado
         )
 
-        # Relacionar la entrega con la ruta (si la relación es ManyToMany)
+        # Asociar la entrega a la ruta
         ruta.entregas.add(entrega)
+
+        # Intentar enviar la notificación push al chofer asignado
+        try:
+            # Buscamos el token FCM registrado para el usuario (chofer)
+            fcm_device = FCMDevice.objects.get(user=conductor.usuario)
+            enviar_notificacion_fcm_v1(
+                token=fcm_device.token,
+                title="Nueva Ruta Asignada",
+                body="Se te ha asignado una nueva ruta."
+            )
+        except FCMDevice.DoesNotExist:
+            print("El chofer no tiene token FCM registrado.")
 
         return CrearRuta(ruta=ruta)
 
@@ -51,7 +69,7 @@ class Query(graphene.ObjectType):
     ruta = graphene.Field(RutaType, id=graphene.Int(required=True))
     mis_rutas = graphene.List(RutaType)
     rutas_por_estado = graphene.List(RutaType, estado=graphene.String(required=True))
-    ruta_por_guia = graphene.Field(RutaType, numero_guia=graphene.String(required=True))  # Nueva consulta
+    ruta_por_guia = graphene.Field(RutaType, numero_guia=graphene.String(required=True))  # Consultar por número de guía
 
     def resolve_ruta(self, info, id):
         return Ruta.objects.get(id=id)
