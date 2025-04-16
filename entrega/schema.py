@@ -57,6 +57,31 @@ class FinalizarEntrega(graphene.Mutation):
 
         return FinalizarEntrega(entrega=entrega)
 
+# Mutación para eliminar TODAS las entregas
+class EliminarTodasEntregas(graphene.Mutation):
+    success = graphene.Boolean()
+
+    def mutate(self, info):
+        # Se eliminan todas las entregas de la base de datos
+        _, _ = Entrega.objects.all().delete()
+        return EliminarTodasEntregas(success=True)
+
+# Mutación para eliminar una entrega por ID
+class EliminarEntregaPorId(graphene.Mutation):
+    class Arguments:
+        id = graphene.Int(required=True)
+
+    success = graphene.Boolean()
+    error = graphene.String()
+
+    def mutate(self, info, id):
+        try:
+            entrega = Entrega.objects.get(id=id)
+            entrega.delete()
+            return EliminarEntregaPorId(success=True)
+        except Entrega.DoesNotExist:
+            return EliminarEntregaPorId(success=False, error="Entrega no encontrada")
+
 # Queries para obtener entregas
 class Query(graphene.ObjectType):
     entrega = graphene.Field(EntregaType, id=graphene.Int(required=True))
@@ -99,6 +124,8 @@ class Query(graphene.ObjectType):
 class Mutation(graphene.ObjectType):
     crear_entrega = CrearEntrega.Field()
     finalizar_entrega = FinalizarEntrega.Field()
+    eliminar_todas_entregas = EliminarTodasEntregas.Field()
+    eliminar_entrega_por_id = EliminarEntregaPorId.Field()
 
 # Esquema GraphQL
 schema = graphene.Schema(query=Query, mutation=Mutation)
