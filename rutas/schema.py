@@ -155,7 +155,7 @@ class Query(graphene.ObjectType):
             return None
 
     def resolve_rutas_completas_por_estado(self, info, estado):
-        # Retorna todas las rutas filtradas por estado, incluyendo todos los datos anidados (chofer, camión, entregas y paquetes).
+        # Retorna todas las rutas filtradas por estado, incluyendo todos los datos anidados.
         return Ruta.objects.filter(estado=estado)
 
 # Agrupamos las mutaciones disponibles

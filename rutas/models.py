@@ -4,7 +4,6 @@ from camiones.models import Camion
 from entrega.models import Entrega  # Importa Entrega para hacer la referencia
 
 class Ruta(models.Model):
-   
     distancia = models.FloatField()
     prioridad = models.IntegerField()
     conductor = models.ForeignKey(Chofer, on_delete=models.CASCADE)
@@ -13,8 +12,9 @@ class Ruta(models.Model):
     fecha_fin = models.DateTimeField()
     estado = models.CharField(max_length=50, default="por hacer")
     
-    # Relación inversa con Entrega
-    entregas = models.ForeignKey(Entrega, on_delete=models.SET_NULL, null=True, blank=True, related_name="rutas")
+    # Cambiado a ManyToManyField para permitir agregar entregas usando .add()
+    entregas = models.ManyToManyField(Entrega, blank=True, related_name="rutas")
 
     def __str__(self):
-        return f"Ruta de {self.ruta_origen} a {self.ruta_destino}"
+        # Asegúrate de reemplazar "ruta_origen" y "ruta_destino" con campos válidos o usa otro identificador.
+        return f"Ruta {self.id} - {self.estado}"
