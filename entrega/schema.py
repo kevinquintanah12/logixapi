@@ -2,9 +2,10 @@ import graphene
 from graphene_django.types import DjangoObjectType
 from .models import Entrega
 from paquete.models import Paquete
-from django.contrib.auth import get_user_model
-
-User = get_user_model()
+#from django.contrib.auth import get_user_model
+#
+# Si en algún momento necesitas el usuario, ya no se usará para asignar el chofer.
+# User = get_user_model()
 
 # Tipo GraphQL para Entrega
 class EntregaType(DjangoObjectType):
@@ -12,7 +13,7 @@ class EntregaType(DjangoObjectType):
         model = Entrega
         fields = "__all__"
 
-# Mutación para crear una entrega sin ruta asignada
+# Mutación para crear una entrega sin asignar chofer
 class CrearEntrega(graphene.Mutation):
     class Arguments:
         paquete_id = graphene.Int(required=True)
@@ -24,15 +25,12 @@ class CrearEntrega(graphene.Mutation):
 
     def mutate(self, info, paquete_id, fecha_entrega, estado, pin):
         paquete = Paquete.objects.get(id=paquete_id)
-        user = info.context.user
-
-        # Crear la entrega y asignarla al chofer actual (si está autenticado)
+        # Se crea la entrega sin asignar chofer
         entrega = Entrega.objects.create(
             paquete=paquete,
             fecha_entrega=fecha_entrega,
             estado=estado,
             pin=pin,
-            chofer=user if user.is_authenticated else None,
         )
         return CrearEntrega(entrega=entrega)
 
@@ -113,12 +111,8 @@ class Query(graphene.ObjectType):
         return Entrega.objects.filter(destinatario__ciudad=ciudad, destinatario__estado=estado)
 
     def resolve_mis_entregas_en_proceso(self, info):
-        user = info.context.user
-
-        if user.is_anonymous:
-            raise Exception("No autenticado")
-
-        return Entrega.objects.filter(estado="En proceso", chofer=user)
+        # Se eliminó el filtro por chofer, ya que el campo no existe.
+        return Entrega.objects.filter(estado="En proceso")
 
 # Mutaciones disponibles en el esquema de Entregas
 class Mutation(graphene.ObjectType):
