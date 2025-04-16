@@ -2,10 +2,6 @@ import graphene
 from graphene_django.types import DjangoObjectType
 from .models import Entrega
 from paquete.models import Paquete
-#from django.contrib.auth import get_user_model
-#
-# Si en algún momento necesitas el usuario, ya no se usará para asignar el chofer.
-# User = get_user_model()
 
 # Tipo GraphQL para Entrega
 class EntregaType(DjangoObjectType):
@@ -80,6 +76,26 @@ class EliminarEntregaPorId(graphene.Mutation):
         except Entrega.DoesNotExist:
             return EliminarEntregaPorId(success=False, error="Entrega no encontrada")
 
+# Nueva mutación para actualizar únicamente el estado de una entrega
+class ActualizarEstadoEntrega(graphene.Mutation):
+    class Arguments:
+        entrega_id = graphene.Int(required=True)
+        estado = graphene.String(required=True)
+
+    entrega = graphene.Field(EntregaType)
+    error = graphene.String()
+
+    def mutate(self, info, entrega_id, estado):
+        try:
+            entrega = Entrega.objects.get(id=entrega_id)
+        except Entrega.DoesNotExist:
+            return ActualizarEstadoEntrega(error="Entrega no encontrada")
+        
+        entrega.estado = estado
+        entrega.save()
+
+        return ActualizarEstadoEntrega(entrega=entrega)
+
 # Queries para obtener entregas
 class Query(graphene.ObjectType):
     entrega = graphene.Field(EntregaType, id=graphene.Int(required=True))
@@ -120,6 +136,7 @@ class Mutation(graphene.ObjectType):
     finalizar_entrega = FinalizarEntrega.Field()
     eliminar_todas_entregas = EliminarTodasEntregas.Field()
     eliminar_entrega_por_id = EliminarEntregaPorId.Field()
+    actualizar_estado_entrega = ActualizarEstadoEntrega.Field()
 
 # Esquema GraphQL
 schema = graphene.Schema(query=Query, mutation=Mutation)
