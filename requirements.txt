@@ -35,4 +35,3 @@ django-channels-graphql-ws>=0.7.1
 
 # Otros paquetes que podrías necesitar
 channels-redis==4.0.0  # si vas a usar Redis como backend de canales
-channels-graphql-ws
