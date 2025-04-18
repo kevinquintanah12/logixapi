@@ -13,7 +13,8 @@ graphql-relay==2.0.1
 django-graphql-jwt==0.3.4
 
 # — Channels & WebSockets
-channels==2.4.0
+channels==3.0.4
+
 daphne==3.0.2
 asgiref==3.8.1
 channels-redis==3.4.1
