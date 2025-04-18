@@ -1,52 +1,58 @@
 import os
 import django
 
-from django.core.asgi import get_asgi_application
-from django.urls import path
-
-from channels.routing import ProtocolTypeRouter, URLRouter
-from channels.auth import AuthMiddlewareStack
-from channels_graphql_ws import GraphqlWsConsumer
-
 # ——————————————————————————————
 # 1. Configuración de Django
 # ——————————————————————————————
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "api_logix.settings")
 django.setup()
 
+
 # ——————————————————————————————
-# 2. Importa tu schema con Query, Mutation y Subscription
+# 2. Importaciones de ASGI, Channels y GraphQL
+#    (haciéndolas después de django.setup())
 # ——————————————————————————————
+from django.core.asgi import get_asgi_application
+from channels.routing import ProtocolTypeRouter, URLRouter
+from channels.auth import AuthMiddlewareStack
+from django.urls import path
+from channels_graphql_ws import GraphqlWsConsumer
+
+# Importa aquí tu schema. Si tienes varios, renómbralos o fusiónalos antes.
 from entrega.schema import schema
-from rutas.schema import schema
+from rutas.schema import schema  # solo si lo necesitas y lo combinas
+
+
 # ——————————————————————————————
-# 3. Define tu Consumer basado en channels_graphql_ws
+# 3. Define tu WebSocket Consumer
 # ——————————————————————————————
 class MyGraphqlWsConsumer(GraphqlWsConsumer):
-    # El consumer “apunta” a tu schema
-    schema = schema
+    schema = schema  # apunta al schema importado
 
     async def on_connect(self, payload):
-        # Aquí puedes validar JWT, cookies, etc.
-        # Si devuelves False o lanzas excepción, la conexión se rechaza.
+        """
+        Aquí puedes validar tokens, cookies, etc.
+        Si devuelves False o lanzas excepción, la conexión WS se rechazará.
+        """
         return
 
+
 # ——————————————————————————————
-# 4. Define las rutas de WebSocket
+# 4. Rutas de WebSocket
 # ——————————————————————————————
 websocket_urlpatterns = [
-    # En /graphql/ atenderemos queries, mutations y subscriptions por WS
     path("graphql/", MyGraphqlWsConsumer.as_asgi()),
 ]
 
+
 # ——————————————————————————————
-# 5. Construye la aplicación ASGI combinando HTTP + WebSocket
+# 5. Aplicación ASGI combinada (HTTP + WS)
 # ——————————————————————————————
 application = ProtocolTypeRouter({
-    # HTTP: Django (views, GraphQL over HTTP, etc.)
+    # Peticiones HTTP “normales”
     "http": get_asgi_application(),
 
-    # WebSocket: Channels + GraphQL WS
+    # WebSocket: envuelto en AuthMiddlewareStack
     "websocket": AuthMiddlewareStack(
         URLRouter(websocket_urlpatterns)
     ),
