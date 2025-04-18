@@ -10,7 +10,7 @@ django-filter==24.2
 django-graphql-jwt==0.4.0
 graphene==3.3
 graphene-django==3.2.2
-graphql-core==2.3.2
+graphql-core==3.2.3
 
 graphql-relay==3.2.0
 gunicorn==22.0.0
@@ -28,7 +28,7 @@ whitenoise==6.7.0
 requests==2.31.0
 django-anymail
 firebase_admin
-graphql-ws==0.4.4
+channels-graphql-ws==0.6.0
 
 channels==3.0.5
 daphne==3.0.2
