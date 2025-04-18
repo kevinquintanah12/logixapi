@@ -28,7 +28,7 @@ whitenoise==6.7.0
 requests==2.31.0
 django-anymail
 firebase_admin
-channels-graphql-ws==0.6.0
+git+https://github.com/datadvance/Channels-GraphQL-Ws.git@v0.6.0#egg=channels-graphql-ws
 
 channels==3.0.5
 daphne==3.0.2
