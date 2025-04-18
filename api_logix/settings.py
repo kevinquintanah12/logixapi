@@ -75,6 +75,8 @@ INSTALLED_APPS = [
     'rutas',
     'fcm',
     'sensoresRuta',
+    'channels',
+    "channels_graphql_ws",
 
     'corsheaders',
 
@@ -90,6 +92,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    
 ]
 
 ROOT_URLCONF = 'api_logix.urls'
@@ -111,7 +114,7 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'api_logix.wsgi.application'
-
+ASGI_APPLICATION = 'api_logix.asgi.application'
 
 # Database
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
@@ -188,4 +191,20 @@ AUTHENTICATION_BACKENDS = [
 ]
 
 CORS_ORIGIN_ALLOW_ALL = True
+
+import os
+
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels_redis.core.RedisChannelLayer',
+        'CONFIG': {
+            "hosts": [
+                (
+                    'rediss://default:AVk-AAIjcDFhYmM2Mzk3Zjg0ZGU0NWNiYTAyNzJiNzkzNDRiNWViZHAxMA@humane-gibbon-22846.upstash.io:6379'
+                ),
+            ],
+        },
+    },
+}
+
 

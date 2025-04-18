@@ -27,3 +27,10 @@ whitenoise==6.7.0
 requests==2.31.0
 django-anymail
 firebase_admin
+graphql-ws==0.4.5
+channels==3.0.5
+daphne==3.0.2
+django-channels-graphql-ws>=0.7.1
+
+# Otros paquetes que podrías necesitar
+channels-redis==4.0.0  # si vas a usar Redis como backend de canales

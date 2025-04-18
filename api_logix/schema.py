@@ -9,7 +9,6 @@ import Ubicacion.schema
 import calcularenvio.schema
 import centrodistribucion.schema
 import horarios.schema
-import chofer.schema
 import cliente.schema
 import destinatario.schema
 import producto.schema
