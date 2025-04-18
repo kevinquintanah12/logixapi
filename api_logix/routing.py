@@ -1,6 +1,8 @@
-from django.urls import path
-from entrega.graphql_subscriptions import MyGraphqlWsConsumer
+# api_logix/routing.py
+from django.urls import re_path
+from graphql_subscriptions import MyGraphqlWsConsumer
 
 websocket_urlpatterns = [
-    path("graphql/", MyGraphqlWsConsumer.as_asgi()),
+    # monta el consumer en ws://<host>/graphql/
+    re_path(r"^graphql/?$", MyGraphqlWsConsumer),
 ]
