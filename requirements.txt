@@ -27,7 +27,8 @@ psycopg2-binary==2.9.9
 requests==2.31.0
 
 # — Utilidades varias
-aniso8601==9.0.1
+aniso8601==7.0.0
+
 Brotli==1.1.0
 click==8.1.7
 h11==0.14.0
