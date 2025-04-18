@@ -4,5 +4,5 @@ from api_logix.consumer import MyGraphqlWsConsumer
 
 websocket_urlpatterns = [
     # monta el consumer en ws://<host>/graphql/
-    re_path(r"^graphql/?$", MyGraphqlWsConsumer),
+    re_path(r"^graphql/$", MyGraphqlWsConsumer.as_asgi()),
 ]
