@@ -20,7 +20,7 @@ channels-redis==3.4.1
 django-channels-graphql-ws==0.9.1        # versión que soporta Channels 3.x :contentReference[oaicite:2]{index=2}
 
 # — ASGI server (opcional, si quieres Uvicorn además de Daphne)
-uvicorn==0.30.1
+uvicorn[standard]
 
 # — Base de datos & HTTP
 psycopg2-binary==2.9.9
