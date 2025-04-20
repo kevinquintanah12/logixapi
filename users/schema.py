@@ -1,11 +1,20 @@
 import graphene
 from django.contrib.auth import get_user_model
 from graphene_django import DjangoObjectType
-from graphql_jwt.decorators import login_required  # Importar el decorador para autenticación
+from graphql_jwt.decorators import login_required  # Para proteger resolvers
+from django.contrib.auth.tokens import default_token_generator
+from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
+from django.utils.encoding import force_bytes, force_str
+from email.mime.text import MIMEText
+import smtplib
+
+User = get_user_model()
 
 class UserType(DjangoObjectType):
     class Meta:
-        model = get_user_model()
+        model = User
+        # Opcional: define campos a exponer
+        # fields = ("id", "username", "email")
 
 class CreateUser(graphene.Mutation):
     user = graphene.Field(UserType)
@@ -16,23 +25,91 @@ class CreateUser(graphene.Mutation):
         email = graphene.String(required=True)
 
     def mutate(self, info, username, password, email):
-        user = get_user_model().objects.create_user(
+        user = User.objects.create_user(
             username=username,
             email=email,
-            password=password  # Aquí asignamos la contraseña correctamente
+            password=password
         )
         return CreateUser(user=user)
 
+class SendPasswordResetEmail(graphene.Mutation):
+    ok = graphene.Boolean()
+
+    class Arguments:
+        email = graphene.String(required=True)
+
+    def mutate(self, info, email):
+        try:
+            user = User.objects.get(email=email)
+        except User.DoesNotExist:
+            # No revelamos existencia de email
+            return SendPasswordResetEmail(ok=True)
+
+        # Generar UID y token
+        uidb64 = urlsafe_base64_encode(force_bytes(user.pk))
+        token = default_token_generator.make_token(user)
+
+        # URL de front para reset
+        reset_link = f"https://tudominio.com/reset-password/{uidb64}/{token}/"
+
+        subject = "Restablece tu contraseña"
+        body = (
+            f"Hola {user.username},\n\n"
+            f"Para restablecer tu contraseña, haz clic en el siguiente enlace:\n\n"
+            f"{reset_link}\n\n"
+            "Si no solicitaste este correo, ignóralo."
+        )
+        message = MIMEText(body, "plain")
+        message["Subject"] = subject
+        message["From"] = "no-reply@tudominio.com"
+        message["To"] = user.email
+
+        try:
+            with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+                server.login("no-reply@tudominio.com", "TU_APP_PASSWORD")
+                server.sendmail(message["From"], [message["To"]], message.as_string())
+        except Exception as e:
+            # Loguear error internamente si es necesario
+            pass
+
+        return SendPasswordResetEmail(ok=True)
+
+class ResetPassword(graphene.Mutation):
+    ok = graphene.Boolean()
+
+    class Arguments:
+        uidb64 = graphene.String(required=True)
+        token = graphene.String(required=True)
+        new_password = graphene.String(required=True)
+
+    def mutate(self, info, uidb64, token, new_password):
+        try:
+            uid = force_str(urlsafe_base64_decode(uidb64))
+            user = User.objects.get(pk=uid)
+        except Exception:
+            raise Exception("Enlace inválido o usuario no encontrado.")
+
+        if not default_token_generator.check_token(user, token):
+            raise Exception("Token inválido o expirado.")
+
+        user.set_password(new_password)
+        user.save()
+        return ResetPassword(ok=True)
+
 class Query(graphene.ObjectType):
     users = graphene.List(UserType)
-    me = graphene.Field(UserType)  # Consulta para obtener el usuario autenticado
+    me = graphene.Field(UserType)
 
     def resolve_users(self, info):
-        return get_user_model().objects.all()
+        return User.objects.all()
 
-    @login_required  # Requiere autenticación para obtener el usuario autenticado
+    @login_required
     def resolve_me(self, info):
-        return info.context.user  # Obtiene el usuario a partir del token JWT
+        return info.context.user
 
 class Mutation(graphene.ObjectType):
     create_user = CreateUser.Field()
+    send_password_reset = SendPasswordResetEmail.Field()
+    reset_password = ResetPassword.Field()
+
+schema = graphene.Schema(query=Query, mutation=Mutation)
