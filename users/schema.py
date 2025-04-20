@@ -13,8 +13,6 @@ User = get_user_model()
 class UserType(DjangoObjectType):
     class Meta:
         model = User
-        # Opcional: define campos a exponer
-        # fields = ("id", "username", "email")
 
 class CreateUser(graphene.Mutation):
     user = graphene.Field(UserType)
@@ -42,14 +40,10 @@ class SendPasswordResetEmail(graphene.Mutation):
         try:
             user = User.objects.get(email=email)
         except User.DoesNotExist:
-            # No revelamos existencia de email
             return SendPasswordResetEmail(ok=True)
 
-        # Generar UID y token
         uidb64 = urlsafe_base64_encode(force_bytes(user.pk))
         token = default_token_generator.make_token(user)
-
-        # URL de front para reset
         reset_link = f"https://tudominio.com/reset-password/{uidb64}/{token}/"
 
         subject = "Restablece tu contraseña"
@@ -69,7 +63,6 @@ class SendPasswordResetEmail(graphene.Mutation):
                 server.login("no-reply@tudominio.com", "TU_APP_PASSWORD")
                 server.sendmail(message["From"], [message["To"]], message.as_string())
         except Exception as e:
-            # Loguear error internamente si es necesario
             pass
 
         return SendPasswordResetEmail(ok=True)
@@ -96,6 +89,23 @@ class ResetPassword(graphene.Mutation):
         user.save()
         return ResetPassword(ok=True)
 
+class DirectPasswordReset(graphene.Mutation):
+    ok = graphene.Boolean()
+
+    class Arguments:
+        username = graphene.String(required=True)
+        new_password = graphene.String(required=True)
+
+    def mutate(self, info, username, new_password):
+        try:
+            user = User.objects.get(username=username)
+        except User.DoesNotExist:
+            raise Exception("Usuario no encontrado.")
+
+        user.set_password(new_password)
+        user.save()
+        return DirectPasswordReset(ok=True)
+
 class Query(graphene.ObjectType):
     users = graphene.List(UserType)
     me = graphene.Field(UserType)
@@ -111,5 +121,6 @@ class Mutation(graphene.ObjectType):
     create_user = CreateUser.Field()
     send_password_reset = SendPasswordResetEmail.Field()
     reset_password = ResetPassword.Field()
+    direct_password_reset = DirectPasswordReset.Field()
 
 schema = graphene.Schema(query=Query, mutation=Mutation)
