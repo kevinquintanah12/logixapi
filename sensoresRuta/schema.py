@@ -41,10 +41,7 @@ from fcm.models          import FCMDevice
 # ——————————————————————————————————————————————————————————————
 # 2) Tipos GraphQL
 # ——————————————————————————————————————————————————————————————
-class RutaType(DjangoObjectType):
-    class Meta:
-        model = Ruta
-        fields = "__all__"
+
 
 class SensorRutaType(DjangoObjectType):
     class Meta:
