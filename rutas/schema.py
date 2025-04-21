@@ -26,13 +26,13 @@ from graphene_django.types import DjangoObjectType
 from channels_graphql_ws import Subscription
 from asgiref.sync import async_to_sync
 
-from graphql_jwt.decorators import login_required
+from graphql_jwt.decorators import login_required  # <-- agregado
 
-from .models           import Ruta, SensorRuta
-from chofer.models     import Chofer
-from camiones.models   import Camion
-from entrega.models    import Entrega
-from paquete.models    import Paquete
+from .models         import Ruta
+from chofer.models   import Chofer
+from camiones.models import Camion
+from entrega.models  import Entrega
+from paquete.models  import Paquete
 
 from fcm.firebase_config import enviar_notificacion_fcm_v1
 from fcm.models          import FCMDevice
@@ -43,17 +43,12 @@ from fcm.models          import FCMDevice
 # ——————————————————————————————————————————————————————————————
 class RutaType(DjangoObjectType):
     class Meta:
-        model = Ruta
-        fields = "__all__"
-
-class SensorRutaType(DjangoObjectType):
-    class Meta:
-        model = SensorRuta
+        model  = Ruta
         fields = "__all__"
 
 
 # ——————————————————————————————————————————————————————————————
-# 3) Subscriptions
+# 3) Subscription: rutas por estado
 # ——————————————————————————————————————————————————————————————
 class RutaPorEstadoSubscription(Subscription):
     """
@@ -81,34 +76,8 @@ class RutaPorEstadoSubscription(Subscription):
         )
 
 
-class SensorRutaPorRutaSubscription(Subscription):
-    """
-    Emite un SensorRuta cada vez que se crea para una ruta específica.
-    """
-    sensor = graphene.Field(SensorRutaType)
-
-    class Arguments:
-        ruta_id = graphene.ID(required=True)
-
-    def subscribe(self, info, ruta_id):
-        # Filtra por ruta_id
-        return [f"sensor_ruta_{ruta_id}"]
-
-    @classmethod
-    def publish(cls, payload, info, ruta_id):
-        sensor_obj = payload.get("sensor")
-        return cls(sensor=sensor_obj)
-
-    @classmethod
-    def broadcast_sensor(cls, sensor_obj):
-        async_to_sync(cls.broadcast)(
-            group   = f"sensor_ruta_{sensor_obj.ruta.id}",
-            payload = {"sensor": sensor_obj},
-        )
-
-
 # ——————————————————————————————————————————————————————————————
-# 4) Mutations (creación + emite)
+# 4) Mutations (crea + emite)
 # ——————————————————————————————————————————————————————————————
 class CrearRuta(graphene.Mutation):
     class Arguments:
@@ -189,32 +158,6 @@ class CambiarEstadoRuta(graphene.Mutation):
         return CambiarEstadoRuta(ruta=ruta)
 
 
-class CrearSensorRuta(graphene.Mutation):
-    class Arguments:
-        ruta_id     = graphene.ID(required=True)
-        latitud     = graphene.Float(required=True)
-        longitud    = graphene.Float(required=True)
-        temperatura = graphene.Float(required=True)
-        humedad     = graphene.Float(required=True)
-
-    sensor = graphene.Field(SensorRutaType)
-
-    def mutate(self, info, ruta_id, latitud, longitud, temperatura, humedad):
-        ruta = Ruta.objects.get(id=ruta_id)
-        sensor = SensorRuta.objects.create(
-            ruta        = ruta,
-            latitud     = latitud,
-            longitud    = longitud,
-            temperatura = temperatura,
-            humedad     = humedad
-        )
-
-        # Emitimos el evento de suscripción de sensor
-        SensorRutaPorRutaSubscription.broadcast_sensor(sensor)
-
-        return CrearSensorRuta(sensor=sensor)
-
-
 # ——————————————————————————————————————————————————————————————
 # 5) Queries
 # ——————————————————————————————————————————————————————————————
@@ -224,7 +167,6 @@ class Query(graphene.ObjectType):
     mis_rutas_por_estado       = graphene.List(RutaType, estado=graphene.String(required=True))
     ruta_por_guia              = graphene.Field(RutaType, numero_guia=graphene.String(required=True))
     rutas_completas_por_estado = graphene.List(RutaType, estado=graphene.String(required=True))
-    sensores_por_ruta          = graphene.List(SensorRutaType, ruta_id=graphene.ID(required=True))
 
     def resolve_ruta(self, info, id):
         return Ruta.objects.get(id=id)
@@ -250,25 +192,24 @@ class Query(graphene.ObjectType):
     def resolve_rutas_completas_por_estado(self, info, estado):
         return Ruta.objects.filter(estado=estado)
 
-    def resolve_sensores_por_ruta(self, info, ruta_id):
-        return SensorRuta.objects.filter(ruta_id=ruta_id).order_by('-timestamp')
-
 
 # ——————————————————————————————————————————————————————————————
-# 6) Roots
+# 6) Mutations root
 # ——————————————————————————————————————————————————————————————
 class Mutation(graphene.ObjectType):
     crear_ruta          = CrearRuta.Field()
     cambiar_estado_ruta = CambiarEstadoRuta.Field()
-    crear_sensor_ruta   = CrearSensorRuta.Field()
-
-class Subscription(graphene.ObjectType):
-    ruta_por_estado   = RutaPorEstadoSubscription.Field()
-    sensor_por_ruta   = SensorRutaPorRutaSubscription.Field()
 
 
 # ——————————————————————————————————————————————————————————————
-# 7) Schema
+# 7) Subscription root
+# ——————————————————————————————————————————————————————————————
+class Subscription(graphene.ObjectType):
+    ruta_por_estado = RutaPorEstadoSubscription.Field()
+
+
+# ——————————————————————————————————————————————————————————————
+# 8) Schema final
 # ——————————————————————————————————————————————————————————————
 schema = graphene.Schema(
     query        = Query,
