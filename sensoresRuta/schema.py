@@ -33,10 +33,10 @@ from chofer.models     import Chofer
 from camiones.models   import Camion
 from entrega.models    import Entrega
 from paquete.models    import Paquete
-
+from rutas.models  import Ruta
 from fcm.firebase_config import enviar_notificacion_fcm_v1
 from fcm.models          import FCMDevice
-
+from rutas.schema import RutaType
 
 # ——————————————————————————————————————————————————————————————
 # 2) Tipos GraphQL
