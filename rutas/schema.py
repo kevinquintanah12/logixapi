@@ -17,6 +17,7 @@ async def _patched_wait(aws, *args, **kwargs):
 
 asyncio.wait = _patched_wait  # parchea en runtime
 
+
 # ——————————————————————————————————————————————————————————————
 # 1) Imports
 # ——————————————————————————————————————————————————————————————
@@ -36,6 +37,7 @@ from paquete.models  import Paquete
 from fcm.firebase_config import enviar_notificacion_fcm_v1
 from fcm.models          import FCMDevice
 
+
 # ——————————————————————————————————————————————————————————————
 # 2) Tipos GraphQL
 # ——————————————————————————————————————————————————————————————
@@ -44,10 +46,14 @@ class RutaType(DjangoObjectType):
         model  = Ruta
         fields = "__all__"
 
+
 # ——————————————————————————————————————————————————————————————
-# 3) Subscriptions
+# 3) Subscription: rutas por estado
 # ——————————————————————————————————————————————————————————————
 class RutaPorEstadoSubscription(Subscription):
+    """
+    Emite una Ruta cada vez que cambia su estado o se crea.
+    """
     ruta   = graphene.Field(RutaType)
     estado = graphene.String()
 
@@ -59,14 +65,24 @@ class RutaPorEstadoSubscription(Subscription):
 
     @classmethod
     def publish(cls, payload, info, estado):
-        return cls(ruta=payload.get("ruta"), estado=estado)
+        ruta_obj = payload.get("ruta")
+        return cls(ruta=ruta_obj, estado=estado)
 
     @classmethod
     def broadcast_ruta(cls, ruta_obj):
-        async_to_sync(cls.broadcast)(group=ruta_obj.estado, payload={"ruta": ruta_obj, "estado": ruta_obj.estado})
+        async_to_sync(cls.broadcast)(
+            group   = ruta_obj.estado,
+            payload = {"ruta": ruta_obj, "estado": ruta_obj.estado},
+        )
 
 
+# ——————————————————————————————————————————————————————————————
+# 4) Subscription: todas las rutas
+# ——————————————————————————————————————————————————————————————
 class TodasRutasSubscription(Subscription):
+    """
+    Emite una Ruta cada vez que se crea o actualiza.
+    """
     ruta = graphene.Field(RutaType)
 
     def subscribe(self, info):
@@ -74,109 +90,19 @@ class TodasRutasSubscription(Subscription):
 
     @classmethod
     def publish(cls, payload, info):
-        return cls(ruta=payload.get("ruta"))
+        ruta_obj = payload.get("ruta")
+        return cls(ruta=ruta_obj)
 
     @classmethod
     def broadcast_ruta(cls, ruta_obj):
-        async_to_sync(cls.broadcast)(group="all", payload={"ruta": ruta_obj})
+        async_to_sync(cls.broadcast)(
+            group   = "all",
+            payload = {"ruta": ruta_obj},
+        )
 
-
-class RutaSubscription(Subscription):
-    ruta = graphene.Field(RutaType)
-
-    class Arguments:
-        id = graphene.Int(required=True)
-
-    def subscribe(self, info, id):
-        return [f"ruta_{id}"]
-
-    @classmethod
-    def publish(cls, payload, info, id):
-        return cls(ruta=payload.get("ruta"))
-
-    @classmethod
-    def broadcast_ruta(cls, ruta_obj):
-        async_to_sync(cls.broadcast)(group=f"ruta_{ruta_obj.id}", payload={"ruta": ruta_obj})
-
-
-class MisRutasSubscription(Subscription):
-    rutas = graphene.List(RutaType)
-
-    def subscribe(self, info):
-        user = info.context.user
-        return [f"mis_rutas_{user.id}"]
-
-    @classmethod
-    def publish(cls, payload, info):
-        return cls(rutas=payload.get("rutas"))
-
-    @classmethod
-    def broadcast_rutas(cls, rutas, user_id):
-        async_to_sync(cls.broadcast)(group=f"mis_rutas_{user_id}", payload={"rutas": rutas})
-
-
-class MisRutasPorEstadoSubscription(Subscription):
-    rutas = graphene.List(RutaType)
-
-    class Arguments:
-        estado = graphene.String(required=True)
-
-    def subscribe(self, info, estado):
-        user = info.context.user
-        return [f"mis_rutas_{user.id}_estado_{estado}"]
-
-    @classmethod
-    def publish(cls, payload, info, estado):
-        return cls(rutas=payload.get("rutas"))
-
-    @classmethod
-    def broadcast_rutas_por_estado(cls, user_id, estado):
-        rutas = list(Ruta.objects.filter(conductor__usuario__id=user_id, estado=estado))
-        async_to_sync(cls.broadcast)(group=f"mis_rutas_{user_id}_estado_{estado}", payload={"rutas": rutas})
-
-
-class RutaPorGuiaSubscription(Subscription):
-    ruta = graphene.Field(RutaType)
-
-    class Arguments:
-        numero_guia = graphene.String(required=True)
-
-    def subscribe(self, info, numero_guia):
-        return [f"guia_{numero_guia}"]
-
-    @classmethod
-    def publish(cls, payload, info, numero_guia):
-        return cls(ruta=payload.get("ruta"))
-
-    @classmethod
-    def broadcast_ruta_por_guia(cls, ruta_obj):
-        for entrega in ruta_obj.entregas.all():
-            for paquete in entrega.paquete_set.all():
-                guia = paquete.numero_guia
-                async_to_sync(cls.broadcast)(group=f"guia_{guia}", payload={"ruta": ruta_obj})
-
-
-class RutasCompletasPorEstadoSubscription(Subscription):
-    rutas = graphene.List(RutaType)
-
-    class Arguments:
-        estado = graphene.String(required=True)
-
-    def subscribe(self, info, estado):
-        return [f"rutas_estado_{estado}"]
-
-    @classmethod
-    def publish(cls, payload, info, estado):
-        return cls(rutas=payload.get("rutas"))
-
-    @classmethod
-    def broadcast_rutas_completas_por_estado(cls, ruta_obj):
-        estado = ruta_obj.estado
-        rutas = list(Ruta.objects.filter(estado=estado))
-        async_to_sync(cls.broadcast)(group=f"rutas_estado_{estado}", payload={"rutas": rutas})
 
 # ——————————————————————————————————————————————————————————————
-# 4) Mutations (crea + emite)
+# 5) Mutations (crea + emite)
 # ——————————————————————————————————————————————————————————————
 class CrearRuta(graphene.Mutation):
     class Arguments:
@@ -191,8 +117,11 @@ class CrearRuta(graphene.Mutation):
 
     ruta = graphene.Field(RutaType)
 
-    def mutate(self, info, distancia, prioridad, conductor_id, vehiculo_id,
-               fecha_inicio, fecha_fin, estado, entrega_id):
+    def mutate(
+        self, info,
+        distancia, prioridad, conductor_id, vehiculo_id,
+        fecha_inicio, fecha_fin, estado, entrega_id
+    ):
         vehiculo  = Camion.objects.get(id=vehiculo_id)
         conductor = Chofer.objects.get(id=conductor_id)
         entrega   = Entrega.objects.get(id=entrega_id)
@@ -208,6 +137,7 @@ class CrearRuta(graphene.Mutation):
         )
         ruta.entregas.add(entrega)
 
+        # notificación FCM
         try:
             device = FCMDevice.objects.get(user=conductor.usuario)
             enviar_notificacion_fcm_v1(
@@ -218,16 +148,12 @@ class CrearRuta(graphene.Mutation):
         except FCMDevice.DoesNotExist:
             print("Chofer sin token FCM.")
 
-        # Emitimos eventos
+        # Emitimos los eventos de suscripción
         RutaPorEstadoSubscription.broadcast_ruta(ruta)
         TodasRutasSubscription.broadcast_ruta(ruta)
-        RutaSubscription.broadcast_ruta(ruta)
-        MisRutasSubscription.broadcast_rutas([ruta], conductor.usuario.id)
-        MisRutasPorEstadoSubscription.broadcast_rutas_por_estado(conductor.usuario.id, ruta.estado)
-        RutaPorGuiaSubscription.broadcast_ruta_por_guia(ruta)
-        RutasCompletasPorEstadoSubscription.broadcast_rutas_completas_por_estado(ruta)
 
         return CrearRuta(ruta=ruta)
+
 
 class CambiarEstadoRuta(graphene.Mutation):
     class Arguments:
@@ -241,6 +167,7 @@ class CambiarEstadoRuta(graphene.Mutation):
         ruta.estado = nuevo_estado
         ruta.save()
 
+        # notificación FCM
         try:
             device = FCMDevice.objects.get(user=ruta.conductor.usuario)
             enviar_notificacion_fcm_v1(
@@ -251,19 +178,15 @@ class CambiarEstadoRuta(graphene.Mutation):
         except FCMDevice.DoesNotExist:
             print("Chofer sin token FCM.")
 
-        # Emitimos eventos
+        # Emitimos los eventos de suscripción
         RutaPorEstadoSubscription.broadcast_ruta(ruta)
         TodasRutasSubscription.broadcast_ruta(ruta)
-        RutaSubscription.broadcast_ruta(ruta)
-        MisRutasSubscription.broadcast_rutas([ruta], ruta.conductor.usuario.id)
-        MisRutasPorEstadoSubscription.broadcast_rutas_por_estado(ruta.conductor.usuario.id, nuevo_estado)
-        RutaPorGuiaSubscription.broadcast_ruta_por_guia(ruta)
-        RutasCompletasPorEstadoSubscription.broadcast_rutas_completas_por_estado(ruta)
 
         return CambiarEstadoRuta(ruta=ruta)
 
+
 # ——————————————————————————————————————————————————————————————
-# 5) Queries
+# 6) Queries
 # ——————————————————————————————————————————————————————————————
 class Query(graphene.ObjectType):
     ruta                       = graphene.Field(RutaType, id=graphene.Int(required=True))
@@ -271,7 +194,7 @@ class Query(graphene.ObjectType):
     mis_rutas_por_estado       = graphene.List(RutaType, estado=graphene.String(required=True))
     ruta_por_guia              = graphene.Field(RutaType, numero_guia=graphene.String(required=True))
     rutas_completas_por_estado = graphene.List(RutaType, estado=graphene.String(required=True))
-    todas_rutas                = graphene.List(RutaType)
+    todas_rutas                = graphene.List(RutaType)  # Consulta pública
 
     def resolve_ruta(self, info, id):
         return Ruta.objects.get(id=id)
@@ -300,27 +223,25 @@ class Query(graphene.ObjectType):
     def resolve_todas_rutas(self, info):
         return Ruta.objects.all()
 
+
 # ——————————————————————————————————————————————————————————————
-# 6) Mutations root
+# 7) Mutations root
 # ——————————————————————————————————————————————————————————————
 class Mutation(graphene.ObjectType):
     crear_ruta          = CrearRuta.Field()
     cambiar_estado_ruta = CambiarEstadoRuta.Field()
 
-# ——————————————————————————————————————————————————————————————
-# 7) Subscription root
-# ——————————————————————————————————————————————————————————————
-class Subscription(graphene.ObjectType):
-    ruta_por_estado             = RutaPorEstadoSubscription.Field()
-    todas_rutas                 = TodasRutasSubscription.Field()
-    ruta                        = RutaSubscription.Field()
-    mis_rutas                   = MisRutasSubscription.Field()
-    mis_rutas_por_estado        = MisRutasPorEstadoSubscription.Field()
-    ruta_por_guia               = RutaPorGuiaSubscription.Field()
-    rutas_completas_por_estado  = RutasCompletasPorEstadoSubscription.Field()
 
 # ——————————————————————————————————————————————————————————————
-# 8) Schema final
+# 8) Subscription root
+# ——————————————————————————————————————————————————————————————
+class Subscription(graphene.ObjectType):
+    ruta_por_estado = RutaPorEstadoSubscription.Field()
+    todas_rutas     = TodasRutasSubscription.Field()
+
+
+# ——————————————————————————————————————————————————————————————
+# 9) Schema final
 # ——————————————————————————————————————————————————————————————
 schema = graphene.Schema(
     query        = Query,
