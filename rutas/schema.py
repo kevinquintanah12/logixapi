@@ -1,4 +1,4 @@
-# schema.py (esquema raíz unificado)
+# schema.py (esquema raíz unificado con Queries de Ruta incluidas)
 
 # ──────────────────────────────────────────────────────────────────────────────
 # 0) Parche asyncio.wait para channels_graphql_ws
@@ -38,9 +38,9 @@ from fcm.models          import FCMDevice
 
 # ──────────────────────────────────────────────────────────────────────────────
 # 2) Importa tus esquemas parciales
-#    - producto.schema → ProductoType
+#    - producto.schema → ProductoType + Query/Mutation
 #    - paquete.schema  → PaqueteType + Query/Mutation
-#    - entrega.schema  → EntregaType + Query
+#    - entrega.schema  → EntregaType + Query/Mutation (si aplicara)
 # ──────────────────────────────────────────────────────────────────────────────
 import producto.schema      as producto_schema
 import paquete.schema       as paquete_schema
@@ -48,27 +48,12 @@ import entrega.schema       as entrega_schema
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# 3) Tipo GraphQL para Ruta (incluye lista de entregas)
+# 3) Tipo GraphQL para Ruta
 # ──────────────────────────────────────────────────────────────────────────────
 class RutaType(DjangoObjectType):
-    entregas = graphene.List(entrega_schema.EntregaType)
-
     class Meta:
         model  = Ruta
-        fields = (
-            "id",
-            "distancia",
-            "prioridad",
-            "conductor",
-            "vehiculo",
-            "fecha_inicio",
-            "fecha_fin",
-            "estado",
-            "entregas",
-        )
-
-    def resolve_entregas(self, info):
-        return self.entregas.all()
+        fields = "__all__"
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -146,7 +131,7 @@ class CrearRuta(graphene.Mutation):
         )
         ruta.entregas.add(entrega)
 
-        # Notificación FCM
+        # envío de notificación FCM
         try:
             device = FCMDevice.objects.get(user=conductor.usuario)
             enviar_notificacion_fcm_v1(
@@ -175,7 +160,6 @@ class CambiarEstadoRuta(graphene.Mutation):
         ruta.estado = nuevo_estado
         ruta.save()
 
-        # Notificación FCM
         try:
             device = FCMDevice.objects.get(user=ruta.conductor.usuario)
             enviar_notificacion_fcm_v1(
@@ -186,7 +170,6 @@ class CambiarEstadoRuta(graphene.Mutation):
         except FCMDevice.DoesNotExist:
             print("Chofer sin token FCM.")
 
-        # Emitimos a suscripciones
         RutaPorEstadoSubscription.broadcast_ruta(ruta)
         TodasRutasSubscription.broadcast_ruta(ruta)
 
@@ -194,9 +177,13 @@ class CambiarEstadoRuta(graphene.Mutation):
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# 6) Queries de Ruta (tal cual tenías en el segundo snippet)
+# 6) Queries
 # ──────────────────────────────────────────────────────────────────────────────
-class RutaQuery(graphene.ObjectType):
+class Query(
+    paquete_schema.Query,
+    entrega_schema.Query,
+    graphene.ObjectType,
+):
     ruta                       = graphene.Field(RutaType, id=graphene.Int(required=True))
     mis_rutas                  = graphene.List(RutaType)
     mis_rutas_por_estado       = graphene.List(RutaType, estado=graphene.String(required=True))
@@ -233,35 +220,31 @@ class RutaQuery(graphene.ObjectType):
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# 7) RootQuery, RootMutation y RootSubscription
+# 7) Mutations root
 # ──────────────────────────────────────────────────────────────────────────────
-class RootQuery(
-    paquete_schema.Query,
-    entrega_schema.Query,
-    RutaQuery,
-    graphene.ObjectType
-):
-    pass
-
-class RootMutation(
+class Mutation(
     paquete_schema.Mutation,
     graphene.ObjectType
 ):
     crear_ruta          = CrearRuta.Field()
     cambiar_estado_ruta = CambiarEstadoRuta.Field()
 
-class RootSubscription(graphene.ObjectType):
+
+# ──────────────────────────────────────────────────────────────────────────────
+# 8) Subscription root
+# ──────────────────────────────────────────────────────────────────────────────
+class Subscription(graphene.ObjectType):
     ruta_por_estado = RutaPorEstadoSubscription.Field()
     todas_rutas     = TodasRutasSubscription.Field()
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# 8) Schema final (registrando todos los tipos para introspección)
+# 9) Schema final
 # ──────────────────────────────────────────────────────────────────────────────
 schema = graphene.Schema(
-    query        = RootQuery,
-    mutation     = RootMutation,
-    subscription = RootSubscription,
+    query        = Query,
+    mutation     = Mutation,
+    subscription = Subscription,
     types        = [
         producto_schema.ProductoType,
         paquete_schema.PaqueteType,
