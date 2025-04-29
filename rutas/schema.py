@@ -18,7 +18,7 @@ asyncio.wait = _patched_wait
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# 1) Imports básicos de Graphene, Django y tus modelos
+# 1) Imports básicos de Graphene y tus modelos
 # ──────────────────────────────────────────────────────────────────────────────
 import graphene
 from graphene_django.types import DjangoObjectType
@@ -30,17 +30,17 @@ from .models         import Ruta
 from chofer.models   import Chofer
 from camiones.models import Camion
 from entrega.models  import Entrega
-
 from paquete.models  import Paquete
+
 from fcm.firebase_config import enviar_notificacion_fcm_v1
 from fcm.models          import FCMDevice
 
 
 # ──────────────────────────────────────────────────────────────────────────────
 # 2) Importa tus esquemas parciales
-#    - producto.schema define ProductoType
-#    - paquete.schema define PaqueteType y sus Query/Mutation
-#    - entrega.schema define EntregaType y su Query (si la tienes)
+#    - producto.schema → ProductoType
+#    - paquete.schema  → PaqueteType + Query/Mutation
+#    - entrega.schema  → EntregaType + Query
 # ──────────────────────────────────────────────────────────────────────────────
 import producto.schema      as producto_schema
 import paquete.schema       as paquete_schema
@@ -48,14 +48,13 @@ import entrega.schema       as entrega_schema
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# 3) Tipo GraphQL para Ruta (añade entregas usando EntregaType importado)
+# 3) Tipo GraphQL para Ruta (incluye lista de entregas)
 # ──────────────────────────────────────────────────────────────────────────────
 class RutaType(DjangoObjectType):
     entregas = graphene.List(entrega_schema.EntregaType)
 
     class Meta:
         model  = Ruta
-        # Lista explícita para exponer entregas
         fields = (
             "id",
             "distancia",
@@ -195,7 +194,7 @@ class CambiarEstadoRuta(graphene.Mutation):
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# 6) Queries de Ruta
+# 6) Queries de Ruta (tal cual tenías en el segundo snippet)
 # ──────────────────────────────────────────────────────────────────────────────
 class RutaQuery(graphene.ObjectType):
     ruta                       = graphene.Field(RutaType, id=graphene.Int(required=True))
@@ -235,7 +234,6 @@ class RutaQuery(graphene.ObjectType):
 
 # ──────────────────────────────────────────────────────────────────────────────
 # 7) RootQuery, RootMutation y RootSubscription
-#    combinan tus módulos de paquete/entrega con Ruta
 # ──────────────────────────────────────────────────────────────────────────────
 class RootQuery(
     paquete_schema.Query,
@@ -258,7 +256,7 @@ class RootSubscription(graphene.ObjectType):
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# 8) Schema final
+# 8) Schema final (registrando todos los tipos para introspección)
 # ──────────────────────────────────────────────────────────────────────────────
 schema = graphene.Schema(
     query        = RootQuery,
