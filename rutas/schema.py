@@ -39,7 +39,7 @@ from fcm.models          import FCMDevice
 
 
 # ——————————————————————————————————————————————————————————————
-# 2) Tipos GraphQL
+# 2) Tipo GraphQL
 # ——————————————————————————————————————————————————————————————
 class RutaType(DjangoObjectType):
     class Meta:
@@ -48,7 +48,7 @@ class RutaType(DjangoObjectType):
 
 
 # ——————————————————————————————————————————————————————————————
-# 3) Subscription: rutas por estado
+# 3) Subscriptions: rutas por estado
 # ——————————————————————————————————————————————————————————————
 class RutaPorEstadoSubscription(Subscription):
     """
@@ -77,7 +77,7 @@ class RutaPorEstadoSubscription(Subscription):
 
 
 # ——————————————————————————————————————————————————————————————
-# 4) Subscription: todas las rutas
+# 4) Subscriptions: todas las rutas
 # ——————————————————————————————————————————————————————————————
 class TodasRutasSubscription(Subscription):
     """
@@ -186,15 +186,16 @@ class CambiarEstadoRuta(graphene.Mutation):
 
 
 # ——————————————————————————————————————————————————————————————
-# 6) Queries
+# 6) Queries (con búsqueda exacta y parcial)
 # ——————————————————————————————————————————————————————————————
 class Query(graphene.ObjectType):
     ruta                       = graphene.Field(RutaType, id=graphene.Int(required=True))
     mis_rutas                  = graphene.List(RutaType)
     mis_rutas_por_estado       = graphene.List(RutaType, estado=graphene.String(required=True))
     ruta_por_guia              = graphene.Field(RutaType, numero_guia=graphene.String(required=True))
+    rutas_por_guia             = graphene.List(RutaType, numero_guia=graphene.String(required=True))  # nueva búsqueda parcial
     rutas_completas_por_estado = graphene.List(RutaType, estado=graphene.String(required=True))
-    todas_rutas                = graphene.List(RutaType)  # Consulta pública
+    todas_rutas                = graphene.List(RutaType)
 
     def resolve_ruta(self, info, id):
         return Ruta.objects.get(id=id)
@@ -216,6 +217,12 @@ class Query(graphene.ObjectType):
             return Ruta.objects.get(entregas__paquete__numero_guia=numero_guia)
         except Ruta.DoesNotExist:
             return None
+
+    def resolve_rutas_por_guia(self, info, numero_guia):
+        # Búsqueda parcial: devuelve todas las rutas que contengan el fragmento
+        return Ruta.objects.filter(
+            entregas__paquete__numero_guia__icontains=numero_guia
+        ).distinct()
 
     def resolve_rutas_completas_por_estado(self, info, estado):
         return Ruta.objects.filter(estado=estado)
