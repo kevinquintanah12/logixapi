@@ -193,7 +193,7 @@ class Query(graphene.ObjectType):
     mis_rutas                  = graphene.List(RutaType)
     mis_rutas_por_estado       = graphene.List(RutaType, estado=graphene.String(required=True))
     ruta_por_guia              = graphene.Field(RutaType, numero_guia=graphene.String(required=True))
-    rutas_por_guia             = graphene.List(RutaType, numero_guia=graphene.String(required=True))  # nueva búsqueda parcial
+    rutas_por_guia             = graphene.List(RutaType, numero_guia=graphene.String(required=True))
     rutas_completas_por_estado = graphene.List(RutaType, estado=graphene.String(required=True))
     todas_rutas                = graphene.List(RutaType)
 
@@ -213,10 +213,8 @@ class Query(graphene.ObjectType):
         return Ruta.objects.filter(conductor=conductor, estado=estado)
 
     def resolve_ruta_por_guia(self, info, numero_guia):
-        try:
-            return Ruta.objects.get(entregas__paquete__numero_guia=numero_guia)
-        except Ruta.DoesNotExist:
-            return None
+        # Usamos filter().first() para devolver None en lugar de lanzar excepción
+        return Ruta.objects.filter(entregas__paquete__numero_guia=numero_guia).first()
 
     def resolve_rutas_por_guia(self, info, numero_guia):
         # Búsqueda parcial: devuelve todas las rutas que contengan el fragmento
