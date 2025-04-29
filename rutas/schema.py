@@ -1,4 +1,4 @@
-# schema.py (esquema raíz unificado con Queries de Ruta incluidas)
+# api_logix/schema.py
 
 # ──────────────────────────────────────────────────────────────────────────────
 # 0) Parche asyncio.wait para channels_graphql_ws
@@ -18,7 +18,7 @@ asyncio.wait = _patched_wait
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# 1) Imports básicos de Graphene y tus modelos
+# 1) Imports de Graphene y modelos
 # ──────────────────────────────────────────────────────────────────────────────
 import graphene
 from graphene_django.types import DjangoObjectType
@@ -37,14 +37,25 @@ from fcm.models          import FCMDevice
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# 2) Importa tus esquemas parciales
-#    - producto.schema → ProductoType + Query/Mutation
-#    - paquete.schema  → PaqueteType + Query/Mutation
-#    - entrega.schema  → EntregaType + Query/Mutation (si aplicara)
+# 2) Imports de esquemas parciales (todos independientes)
 # ──────────────────────────────────────────────────────────────────────────────
-import producto.schema      as producto_schema
-import paquete.schema       as paquete_schema
-import entrega.schema       as entrega_schema
+import users.schema               as users_schema
+import sensoresRuta.schema        as sensoresruta_schema
+import fcm.schema                 as fcm_schema
+import rutas.schema               as rutas_schema
+import camiones.schema            as camiones_schema
+import entrega.schema             as entrega_schema
+import paquete.schema             as paquete_schema
+import producto.schema            as producto_schema
+import destinatario.schema        as destinatario_schema
+import cliente.schema             as cliente_schema
+import chofer.schema              as chofer_schema
+import horarios.schema            as horarios_schema
+import centrodistribucion.schema  as centrodis_schema
+import roles_y_permisos.schema    as rolesperm_schema
+import tipoproductos.schema       as tiposprod_schema
+import Ubicacion.schema           as ubicacion_schema
+import calcularenvio.schema       as calcularenvio_schema
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -177,69 +188,72 @@ class CambiarEstadoRuta(graphene.Mutation):
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# 6) Queries
+# 6) Root Query (solo independientes), ObjectType al final
 # ──────────────────────────────────────────────────────────────────────────────
 class Query(
-    paquete_schema.Query,
+    users_schema.Query,
+    sensoresruta_schema.Query,
+    fcm_schema.Query,
+    rutas_schema.Query,
+    camiones_schema.Query,
     entrega_schema.Query,
+    paquete_schema.Query,
+    producto_schema.Query,
+    destinatario_schema.Query,
+    cliente_schema.Query,
+    chofer_schema.Query,
+    horarios_schema.Query,
+    centrodis_schema.Query,
+    rolesperm_schema.Query,
+    tiposprod_schema.Query,
+    ubicacion_schema.Query,
+    calcularenvio_schema.Query,
     graphene.ObjectType,
 ):
-    ruta                       = graphene.Field(RutaType, id=graphene.Int(required=True))
-    mis_rutas                  = graphene.List(RutaType)
-    mis_rutas_por_estado       = graphene.List(RutaType, estado=graphene.String(required=True))
-    ruta_por_guia              = graphene.Field(RutaType, numero_guia=graphene.String(required=True))
-    rutas_completas_por_estado = graphene.List(RutaType, estado=graphene.String(required=True))
-    todas_rutas                = graphene.List(RutaType)
-
-    def resolve_ruta(self, info, id):
-        return Ruta.objects.get(id=id)
-
-    @login_required
-    def resolve_mis_rutas(self, info):
-        user      = info.context.user
-        conductor = Chofer.objects.get(usuario=user)
-        return Ruta.objects.filter(conductor=conductor)
-
-    @login_required
-    def resolve_mis_rutas_por_estado(self, info, estado):
-        user      = info.context.user
-        conductor = Chofer.objects.get(usuario=user)
-        return Ruta.objects.filter(conductor=conductor, estado=estado)
-
-    def resolve_ruta_por_guia(self, info, numero_guia):
-        try:
-            return Ruta.objects.get(entregas__paquete__numero_guia=numero_guia)
-        except Ruta.DoesNotExist:
-            return None
-
-    def resolve_rutas_completas_por_estado(self, info, estado):
-        return Ruta.objects.filter(estado=estado)
-
-    def resolve_todas_rutas(self, info):
-        return Ruta.objects.all()
+    """Combina aquí **solamente** los Query independientes de cada app."""
+    pass
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# 7) Mutations root
+# 7) Root Mutation (igual que Query)
 # ──────────────────────────────────────────────────────────────────────────────
 class Mutation(
+    users_schema.Mutation,
+    sensoresruta_schema.Mutation,
+    fcm_schema.Mutation,
+    rutas_schema.Mutation,
+    camiones_schema.Mutation,
+    entrega_schema.Mutation,
     paquete_schema.Mutation,
-    graphene.ObjectType
+    producto_schema.Mutation,
+    destinatario_schema.Mutation,
+    cliente_schema.Mutation,
+    chofer_schema.Mutation,
+    horarios_schema.Mutation,
+    centrodis_schema.Mutation,
+    rolesperm_schema.Mutation,
+    tiposprod_schema.Mutation,
+    ubicacion_schema.Mutation,
+    calcularenvio_schema.Mutation,
+    graphene.ObjectType,
 ):
-    crear_ruta          = CrearRuta.Field()
-    cambiar_estado_ruta = CambiarEstadoRuta.Field()
+    """Combina aquí las Mutations de cada app."""
+    pass
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# 8) Subscription root
+# 8) Root Subscription (solo las tuyas + las de apps que definan Subscriptions)
 # ──────────────────────────────────────────────────────────────────────────────
-class Subscription(graphene.ObjectType):
-    ruta_por_estado = RutaPorEstadoSubscription.Field()
-    todas_rutas     = TodasRutasSubscription.Field()
+class Subscription(
+    rutas_schema.Subscription,
+    # si hay otras apps con Subscription, añádelas aquí...
+    graphene.ObjectType,
+):
+    pass
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# 9) Schema final
+# 9) Construcción final del Schema
 # ──────────────────────────────────────────────────────────────────────────────
 schema = graphene.Schema(
     query        = Query,
