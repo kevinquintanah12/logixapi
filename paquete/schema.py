@@ -1,18 +1,41 @@
 import graphene
 from graphene_django import DjangoObjectType
 from .models import Paquete
-from producto.schema import ProductoType           # ← Importamos aquí el tipo
+from producto.models import Producto
+from producto.schema import ProductoType
 from email.mime.text import MIMEText
 import smtplib
 
-# No redefinimos ProductoType, lo traemos del otro módulo
+# ---------------------------------------------------
+# 1) Tipo GraphQL para Producto (ya definido en producto/schema.py)
+# ---------------------------------------------------
+# from producto.schema import ProductoType
 
+# ---------------------------------------------------
+# 2) Tipo GraphQL para Paquete
+#    - Exponemos explícitamente el campo `producto`
+#    - Listamos sólo los campos que realmente usamos
+# ---------------------------------------------------
 class PaqueteType(DjangoObjectType):
+    producto = graphene.Field(ProductoType)
+
     class Meta:
         model = Paquete
-        fields = "__all__"  # Aquí Graphene ya sabe de producto gracias al import
+        fields = (
+            "id",
+            "numero_guia",
+            "codigo_barras",
+            "fecha_registro",
+            "producto",
+        )
 
-# Mutación para crear un paquete a partir de un producto
+    def resolve_producto(self, info):
+        # Retornamos la instancia de Producto relacionada
+        return self.producto
+
+# ---------------------------------------------------
+# 3) Mutación: crear un paquete a partir de un producto
+# ---------------------------------------------------
 class CrearPaquete(graphene.Mutation):
     class Arguments:
         producto_id = graphene.Int(required=True)
@@ -20,16 +43,18 @@ class CrearPaquete(graphene.Mutation):
     paquete = graphene.Field(PaqueteType)
 
     def mutate(self, info, producto_id):
-        producto = ProductoType._meta.model.objects.get(id=producto_id)
+        producto = Producto.objects.get(id=producto_id)
         paquete = Paquete.objects.create(producto=producto)
         return CrearPaquete(paquete=paquete)
 
-# Mutación para enviar el número de guía por email
+# ---------------------------------------------------
+# 4) Mutación: enviar el número de guía por email
+# ---------------------------------------------------
 class EnviarGuiaEmail(graphene.Mutation):
     class Arguments:
         paquete_id = graphene.Int(required=True)
-        email1 = graphene.String(required=True)
-        email2 = graphene.String(required=True)
+        email1     = graphene.String(required=True)
+        email2     = graphene.String(required=True)
 
     success = graphene.Boolean()
     paquete = graphene.Field(PaqueteType)
@@ -47,7 +72,7 @@ class EnviarGuiaEmail(graphene.Mutation):
 
         message = MIMEText(body, "plain")
         message["Subject"] = subject
-        message["From"] = "logisticlogix0@gmail.com"
+        message["From"]    = "logisticlogix0@gmail.com"
         recipients = [email1, email2]
 
         try:
@@ -61,10 +86,13 @@ class EnviarGuiaEmail(graphene.Mutation):
 
         return EnviarGuiaEmail(success=success, paquete=paquete)
 
+# ---------------------------------------------------
+# 5) Query: obtener paquetes
+# ---------------------------------------------------
 class Query(graphene.ObjectType):
-    paquete = graphene.Field(PaqueteType, id=graphene.Int(required=True))
-    paquetes = graphene.List(PaqueteType)
-    ultimo_paquete = graphene.Field(PaqueteType)
+    paquete          = graphene.Field(PaqueteType, id=graphene.Int(required=True))
+    paquetes         = graphene.List(PaqueteType)
+    ultimo_paquete   = graphene.Field(PaqueteType)
 
     def resolve_paquete(self, info, id):
         return Paquete.objects.get(id=id)
@@ -75,8 +103,18 @@ class Query(graphene.ObjectType):
     def resolve_ultimo_paquete(self, info):
         return Paquete.objects.last()
 
+# ---------------------------------------------------
+# 6) Agrupamos las mutaciones
+# ---------------------------------------------------
 class Mutation(graphene.ObjectType):
-    crear_paquete = CrearPaquete.Field()
+    crear_paquete    = CrearPaquete.Field()
     enviar_guia_email = EnviarGuiaEmail.Field()
 
-schema = graphene.Schema(query=Query, mutation=Mutation)
+# ---------------------------------------------------
+# 7) Esquema final, registrando ProductoType
+# ---------------------------------------------------
+schema = graphene.Schema(
+    query=Query,
+    mutation=Mutation,
+    types=[ProductoType],  # Para asegurar que Graphene incluya ProductoType
+)
