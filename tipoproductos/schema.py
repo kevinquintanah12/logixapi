@@ -158,14 +158,57 @@ class EditarHumedad(graphene.Mutation):
         humedad.save()
         return EditarHumedad(humedad=humedad)
 
+# Mutaciones de eliminación
+class EliminarTipoProducto(graphene.Mutation):
+    class Arguments:
+        id = graphene.Int()
+    ok = graphene.Boolean()
+
+    @login_required
+    def mutate(self, info, id=None):
+        if id is not None:
+            TipoProducto.objects.filter(id=id).delete()
+        else:
+            TipoProducto.objects.all().delete()
+        return EliminarTipoProducto(ok=True)
+
+class EliminarTemperatura(graphene.Mutation):
+    class Arguments:
+        id = graphene.Int()
+    ok = graphene.Boolean()
+
+    @login_required
+    def mutate(self, info, id=None):
+        if id is not None:
+            Temperatura.objects.filter(id=id).delete()
+        else:
+            Temperatura.objects.all().delete()
+        return EliminarTemperatura(ok=True)
+
+class EliminarHumedad(graphene.Mutation):
+    class Arguments:
+        id = graphene.Int()
+    ok = graphene.Boolean()
+
+    @login_required
+    def mutate(self, info, id=None):
+        if id is not None:
+            Humedad.objects.filter(id=id).delete()
+        else:
+            Humedad.objects.all().delete()
+        return EliminarHumedad(ok=True)
+
 # Registrar mutaciones
 class Mutation(graphene.ObjectType):
     crear_tipo_producto = CrearTipoProducto.Field()
     editar_tipo_producto = EditarTipoProducto.Field()
+    eliminar_tipo_producto = EliminarTipoProducto.Field()
     crear_temperatura = CrearTemperatura.Field()
     editar_temperatura = EditarTemperatura.Field()
+    eliminar_temperatura = EliminarTemperatura.Field()
     crear_humedad = CrearHumedad.Field()
     editar_humedad = EditarHumedad.Field()
+    eliminar_humedad = EliminarHumedad.Field()
 
 # Definir el esquema GraphQL
 schema = graphene.Schema(query=Query, mutation=Mutation)
