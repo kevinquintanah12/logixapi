@@ -12,12 +12,10 @@ class UbicacionType(DjangoObjectType):
     class Meta:
         model = Ubicacion
 
-# Consultas
 class Query(graphene.ObjectType):
-    # Consulta para obtener todas las ubicaciones (detallada)
+    # Obtener todas las ubicaciones detalladas
     ubicaciones = graphene.List(UbicacionType)
-
-    # Consulta para obtener la lista de ubicaciones en un formato adecuado para el ComboBox
+    # Lista para ComboBox ("id: ciudad, estado")
     ubicaciones_list = graphene.List(graphene.String)
 
     @login_required
@@ -26,9 +24,9 @@ class Query(graphene.ObjectType):
 
     @login_required
     def resolve_ubicaciones_list(self, info):
-        # Retorna una lista con id, ciudad y estado para el ComboBox
         return [
-            f"{ubicacion.id}: {ubicacion.ciudad}, {ubicacion.estado}" for ubicacion in Ubicacion.objects.all()
+            f"{u.id}: {u.ciudad}, {u.estado}"
+            for u in Ubicacion.objects.all()
         ]
 
 # Mutaciones
@@ -41,37 +39,87 @@ class CrearUbicacion(graphene.Mutation):
 
     @login_required
     def mutate(self, info, ciudad, estado):
-        # Obtener coordenadas usando la API de Mapbox
+        # Obtener coordenadas de Mapbox
         query = f"{ciudad}, {estado}"
-        url = f"https://api.mapbox.com/geocoding/v5/mapbox.places/{query}.json?access_token={MAPBOX_ACCESS_TOKEN}"
-
-        response = requests.get(url)
-        if response.status_code != 200:
+        url = (
+            f"https://api.mapbox.com/geocoding/v5/mapbox.places/"
+            f"{query}.json?access_token={MAPBOX_ACCESS_TOKEN}"
+        )
+        resp = requests.get(url)
+        if resp.status_code != 200:
             raise Exception("Error al conectarse con la API de Mapbox.")
-
-        data = response.json()
+        data = resp.json()
         if not data.get("features"):
-            raise Exception("No se encontraron coordenadas para la ubicación proporcionada.")
+            raise Exception("No se encontraron coordenadas para la ubicación dada.")
 
-        # Extraer coordenadas (Mapbox devuelve [longitud, latitud])
-        longitud, latitud = data["features"][0]["geometry"]["coordinates"]
-
-        # Convertir a Decimal antes de guardar en la base de datos
-        latitud = Decimal(str(latitud))
-        longitud = Decimal(str(longitud))
-
-        # Crear la nueva ubicación en la base de datos
+        lon, lat = data["features"][0]["geometry"]["coordinates"]
         ubicacion = Ubicacion.objects.create(
             ciudad=ciudad,
             estado=estado,
-            latitud=latitud,
-            longitud=longitud
+            latitud=Decimal(str(lat)),
+            longitud=Decimal(str(lon))
         )
         return CrearUbicacion(ubicacion=ubicacion)
 
-# Definir la mutación
+class ActualizarUbicacion(graphene.Mutation):
+    class Arguments:
+        id = graphene.ID(required=True)
+        ciudad = graphene.String()
+        estado = graphene.String()
+
+    ubicacion = graphene.Field(UbicacionType)
+
+    @login_required
+    def mutate(self, info, id, ciudad=None, estado=None):
+        try:
+            ubicacion = Ubicacion.objects.get(pk=id)
+        except Ubicacion.DoesNotExist:
+            raise Exception("Ubicación no encontrada.")
+
+        # Actualizar campos
+        if ciudad:
+            ubicacion.ciudad = ciudad
+        if estado:
+            ubicacion.estado = estado
+
+        # Si cambió ubicación, actualizar coordenadas
+        if ciudad or estado:
+            query = f"{ubicacion.ciudad}, {ubicacion.estado}"
+            url = (
+                f"https://api.mapbox.com/geocoding/v5/mapbox.places/"
+                f"{query}.json?access_token={MAPBOX_ACCESS_TOKEN}"
+            )
+            resp = requests.get(url)
+            if resp.status_code != 200:
+                raise Exception("Error al actualizar coordenadas en Mapbox.")
+            data = resp.json()
+            if not data.get("features"):
+                raise Exception("No se encontraron nuevas coordenadas.")
+            lon, lat = data["features"][0]["geometry"]["coordinates"]
+            ubicacion.latitud = Decimal(str(lat))
+            ubicacion.longitud = Decimal(str(lon))
+
+        ubicacion.save()
+        return ActualizarUbicacion(ubicacion=ubicacion)
+
+class EliminarUbicacion(graphene.Mutation):
+    class Arguments:
+        id = graphene.ID(required=True)
+
+    ok = graphene.Boolean()
+
+    @login_required
+    def mutate(self, info, id):
+        try:
+            ubicacion = Ubicacion.objects.get(pk=id)
+        except Ubicacion.DoesNotExist:
+            raise Exception("Ubicación no encontrada.")
+        ubicacion.delete()
+        return EliminarUbicacion(ok=True)
+
 class Mutation(graphene.ObjectType):
     crear_ubicacion = CrearUbicacion.Field()
+    actualizar_ubicacion = ActualizarUbicacion.Field()
+    eliminar_ubicacion = EliminarUbicacion.Field()
 
-# Definir el esquema GraphQL
 schema = graphene.Schema(query=Query, mutation=Mutation)
