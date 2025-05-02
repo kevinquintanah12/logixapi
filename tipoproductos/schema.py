@@ -35,7 +35,7 @@ class Query(graphene.ObjectType):
     def resolve_humedad(self, info, tipo_producto_id):
         return Humedad.objects.filter(tipo_producto_id=tipo_producto_id).first()
 
-# Mutaciones
+# Mutaciones de creación
 class CrearTipoProducto(graphene.Mutation):
     class Arguments:
         nombre = graphene.String(required=True)
@@ -47,12 +47,10 @@ class CrearTipoProducto(graphene.Mutation):
     @login_required
     def mutate(self, info, nombre, descripcion, precio_base):
         precio_base_decimal = Decimal(precio_base)
-
         tipo_producto = TipoProducto.objects.create(
             nombre=nombre,
             descripcion=descripcion,
             precio_base=precio_base_decimal
-
         )
         return CrearTipoProducto(tipo_producto=tipo_producto)
 
@@ -72,7 +70,7 @@ class CrearTemperatura(graphene.Mutation):
             tipo_producto=tipo_producto,
             rango_minimo=rango_minimo,
             rango_maximo=rango_maximo,
-            tarifa_extra=Decimal(tarifa_extra)  # <- Convertimos a Decimal antes de guardar
+            tarifa_extra=Decimal(tarifa_extra)
         )
         return CrearTemperatura(temperatura=temperatura)
 
@@ -92,15 +90,82 @@ class CrearHumedad(graphene.Mutation):
             tipo_producto=tipo_producto,
             rango_minimo=rango_minimo,
             rango_maximo=rango_maximo,
-            tarifa_extra=Decimal(tarifa_extra)  # <- Convertimos a Decimal antes de guardar
+            tarifa_extra=Decimal(tarifa_extra)
         )
         return CrearHumedad(humedad=humedad)
+
+# Mutaciones de edición
+class EditarTipoProducto(graphene.Mutation):
+    class Arguments:
+        id = graphene.Int(required=True)
+        nombre = graphene.String()
+        descripcion = graphene.String()
+        precio_base = graphene.Float()
+
+    tipo_producto = graphene.Field(TipoProductoType)
+
+    @login_required
+    def mutate(self, info, id, nombre=None, descripcion=None, precio_base=None):
+        tipo_producto = TipoProducto.objects.get(id=id)
+        if nombre is not None:
+            tipo_producto.nombre = nombre
+        if descripcion is not None:
+            tipo_producto.descripcion = descripcion
+        if precio_base is not None:
+            tipo_producto.precio_base = Decimal(precio_base)
+        tipo_producto.save()
+        return EditarTipoProducto(tipo_producto=tipo_producto)
+
+class EditarTemperatura(graphene.Mutation):
+    class Arguments:
+        id = graphene.Int(required=True)
+        rango_minimo = graphene.Int()
+        rango_maximo = graphene.Int()
+        tarifa_extra = graphene.Float()
+
+    temperatura = graphene.Field(TemperaturaType)
+
+    @login_required
+    def mutate(self, info, id, rango_minimo=None, rango_maximo=None, tarifa_extra=None):
+        temperatura = Temperatura.objects.get(id=id)
+        if rango_minimo is not None:
+            temperatura.rango_minimo = rango_minimo
+        if rango_maximo is not None:
+            temperatura.rango_maximo = rango_maximo
+        if tarifa_extra is not None:
+            temperatura.tarifa_extra = Decimal(tarifa_extra)
+        temperatura.save()
+        return EditarTemperatura(temperatura=temperatura)
+
+class EditarHumedad(graphene.Mutation):
+    class Arguments:
+        id = graphene.Int(required=True)
+        rango_minimo = graphene.Int()
+        rango_maximo = graphene.Int()
+        tarifa_extra = graphene.Float()
+
+    humedad = graphene.Field(HumedadType)
+
+    @login_required
+    def mutate(self, info, id, rango_minimo=None, rango_maximo=None, tarifa_extra=None):
+        humedad = Humedad.objects.get(id=id)
+        if rango_minimo is not None:
+            humedad.rango_minimo = rango_minimo
+        if rango_maximo is not None:
+            humedad.rango_maximo = rango_maximo
+        if tarifa_extra is not None:
+            humedad.tarifa_extra = Decimal(tarifa_extra)
+        humedad.save()
+        return EditarHumedad(humedad=humedad)
 
 # Registrar mutaciones
 class Mutation(graphene.ObjectType):
     crear_tipo_producto = CrearTipoProducto.Field()
+    editar_tipo_producto = EditarTipoProducto.Field()
     crear_temperatura = CrearTemperatura.Field()
+    editar_temperatura = EditarTemperatura.Field()
     crear_humedad = CrearHumedad.Field()
+    editar_humedad = EditarHumedad.Field()
 
 # Definir el esquema GraphQL
 schema = graphene.Schema(query=Query, mutation=Mutation)
