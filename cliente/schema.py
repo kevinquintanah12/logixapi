@@ -8,10 +8,8 @@ class ClienteType(DjangoObjectType):
         fields = "__all__"
 
 class Query(graphene.ObjectType):
-    # Ya existentes
     cliente = graphene.Field(ClienteType, id=graphene.Int(required=True))
     ultimo_cliente = graphene.Field(ClienteType)
-    # Nuevo: todos los clientes
     clientes = graphene.List(ClienteType)
 
     def resolve_cliente(self, info, id):
@@ -36,7 +34,7 @@ class CrearCliente(graphene.Mutation):
 
     cliente = graphene.Field(ClienteType)
 
-    def mutate(self, info, nombre, apellido, razon_social, rfc, direccion, codigo_postal, telefono, email):
+    def mutate(self, info, nombre, apellido, razon_social, rfc, direccion, codigo_postal, telefono=None, email=None):
         cliente = Cliente.objects.create(
             nombre=nombre,
             apellido=apellido,
@@ -49,7 +47,45 @@ class CrearCliente(graphene.Mutation):
         )
         return CrearCliente(cliente=cliente)
 
+class ActualizarCliente(graphene.Mutation):
+    class Arguments:
+        id = graphene.Int(required=True)
+        nombre = graphene.String()
+        apellido = graphene.String()
+        razon_social = graphene.String()
+        rfc = graphene.String()
+        direccion = graphene.String()
+        codigo_postal = graphene.String()
+        telefono = graphene.String()
+        email = graphene.String()
+
+    cliente = graphene.Field(ClienteType)
+
+    def mutate(self, info, id, **kwargs):
+        cliente = Cliente.objects.get(id=id)
+        for attr, value in kwargs.items():
+            if value is not None:
+                setattr(cliente, attr, value)
+        cliente.save()
+        return ActualizarCliente(cliente=cliente)
+
+class EliminarCliente(graphene.Mutation):
+    class Arguments:
+        id = graphene.Int(required=True)
+
+    ok = graphene.Boolean()
+
+    def mutate(self, info, id):
+        try:
+            cliente = Cliente.objects.get(id=id)
+            cliente.delete()
+            return EliminarCliente(ok=True)
+        except Cliente.DoesNotExist:
+            return EliminarCliente(ok=False)
+
 class Mutation(graphene.ObjectType):
     crear_cliente = CrearCliente.Field()
+    actualizar_cliente = ActualizarCliente.Field()
+    eliminar_cliente = EliminarCliente.Field()
 
 schema = graphene.Schema(query=Query, mutation=Mutation)
