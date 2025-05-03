@@ -2,24 +2,27 @@ import graphene
 from graphene_django import DjangoObjectType
 from .models import Cliente
 
-# Definición del tipo Cliente para GraphQL
 class ClienteType(DjangoObjectType):
     class Meta:
         model = Cliente
-        fields = "__all__"  # Puedes especificar los campos que quieres exponer aquí
+        fields = "__all__"
 
-# Consultas para Cliente
 class Query(graphene.ObjectType):
+    # Ya existentes
     cliente = graphene.Field(ClienteType, id=graphene.Int(required=True))
     ultimo_cliente = graphene.Field(ClienteType)
+    # Nuevo: todos los clientes
+    clientes = graphene.List(ClienteType)
 
     def resolve_cliente(self, info, id):
         return Cliente.objects.get(id=id)
-    
+
     def resolve_ultimo_cliente(self, info):
         return Cliente.objects.order_by('-id').first()
 
-# Mutaciones para Cliente
+    def resolve_clientes(self, info):
+        return Cliente.objects.all()
+
 class CrearCliente(graphene.Mutation):
     class Arguments:
         nombre = graphene.String(required=True)
@@ -46,9 +49,7 @@ class CrearCliente(graphene.Mutation):
         )
         return CrearCliente(cliente=cliente)
 
-# Esquema de Mutaciones
 class Mutation(graphene.ObjectType):
     crear_cliente = CrearCliente.Field()
 
-# Esquema completo de Cliente
 schema = graphene.Schema(query=Query, mutation=Mutation)
