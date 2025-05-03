@@ -77,6 +77,7 @@ INSTALLED_APPS = [
     'sensoresRuta',
     'channels',
     "channels_graphql_ws",
+    "chat",
 
     'corsheaders',
 
