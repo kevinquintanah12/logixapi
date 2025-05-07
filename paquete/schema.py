@@ -77,7 +77,7 @@ class EnviarGuiaEmail(graphene.Mutation):
 
         try:
             with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
-                server.login("logisticlogix0@gmail.com", "tu_app_password")
+                server.login("logisticlogix0@gmail.com", "nzvi ailf xxck gctf")
                 server.sendmail(message["From"], recipients, message.as_string())
             success = True
         except Exception as e:
