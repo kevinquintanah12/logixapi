@@ -11,7 +11,7 @@ import smtplib
 
 # Función para verificar si un PIN es secuencial
 def es_secuencial(pin):
-    ascending = all(int(pin[i]) + 1 == int(pin[i+1]) for i in range(len(pin) - 1))
+    ascending  = all(int(pin[i]) + 1 == int(pin[i+1]) for i in range(len(pin) - 1))
     descending = all(int(pin[i]) - 1 == int(pin[i+1]) for i in range(len(pin) - 1))
     return ascending or descending
 
@@ -22,10 +22,10 @@ class ChoferType(DjangoObjectType):
 
 # Definición de consultas GraphQL
 class Query(graphene.ObjectType):
-    all_choferes = graphene.List(ChoferType)
-    chofer_by_id = graphene.Field(ChoferType, id=graphene.Int())
+    all_choferes       = graphene.List(ChoferType)
+    chofer_by_id       = graphene.Field(ChoferType, id=graphene.Int())
     chofer_autenticado = graphene.Field(ChoferType)
-    check_pin = graphene.Boolean(pin=graphene.String(required=True))
+    check_pin          = graphene.Boolean(pin=graphene.String(required=True))
 
     def resolve_all_choferes(self, info, **kwargs):
         user = info.context.user
@@ -37,97 +37,86 @@ class Query(graphene.ObjectType):
         user = info.context.user
         if not user.is_authenticated:
             raise Exception("Debes estar autenticado para ver los detalles de un chofer.")
-        try:
-            return Chofer.objects.get(pk=id)
-        except Chofer.DoesNotExist:
-            return None
+        return Chofer.objects.filter(pk=id).first()
 
     def resolve_chofer_autenticado(self, info):
         user = info.context.user
         if not user.is_authenticated:
             raise Exception("Debes estar autenticado para ver tu información.")
-        try:
-            return Chofer.objects.get(usuario=user)
-        except Chofer.DoesNotExist:
-            raise Exception("No tienes un chofer asociado a tu cuenta.")
+        return Chofer.objects.filter(usuario=user).first()
 
     def resolve_check_pin(self, info, pin):
         user = info.context.user
         if not user.is_authenticated:
             raise Exception("Debes estar autenticado para verificar el PIN.")
-        try:
-            chofer = Chofer.objects.get(usuario=user)
-        except Chofer.DoesNotExist:
+        chofer = Chofer.objects.filter(usuario=user).first()
+        if not chofer:
             raise Exception("No se encontró un chofer asociado a tu cuenta.")
         return chofer.pin == pin
 
-# Mutación para crear un Chofer recibiendo el userId y la contraseña en texto plano como argumentos
+# Mutación para crear un Chofer recibiendo contraseña en texto plano
 class CreateChofer(graphene.Mutation):
     class Arguments:
-        user_id = graphene.Int(required=True)  # Recibe el ID del usuario
-        nombre = graphene.String(required=True)
-        apellidos = graphene.String(required=True)
-        rfc = graphene.String(required=True)
-        licencia = graphene.String(required=True)
+        user_id         = graphene.Int(required=True)
+        nombre          = graphene.String(required=True)
+        apellidos       = graphene.String(required=True)
+        rfc             = graphene.String(required=True)
+        licencia        = graphene.String(required=True)
         certificaciones = graphene.String()
-        horario_id = graphene.Int(required=True)
-        password = graphene.String(required=True)  # Contraseña en texto plano
+        horario_id      = graphene.Int(required=True)
+        password        = graphene.String(required=True)
 
     chofer = graphene.Field(ChoferType)
 
     def mutate(self, info, user_id, nombre, apellidos, rfc, licencia, certificaciones, horario_id, password):
-        # Guardamos la contraseña en una variable local para enviarla luego
+        # Guardamos la contraseña en claro para el email
         password_plain = password
 
-        # Buscar el usuario por id
+        # Buscar el usuario
         try:
             usuario = User.objects.get(id=user_id)
         except User.DoesNotExist:
             raise Exception("El usuario especificado no existe.")
 
-        # Actualizar la contraseña en el usuario usando set_password (esto la cifrará)
+        # Asignar y guardar contraseña cifrada
         usuario.set_password(password_plain)
         usuario.save()
 
-        # Verificar que el horario existe
+        # Verificar horario
         try:
             horario = Horario.objects.get(id=horario_id)
         except Horario.DoesNotExist:
             raise Exception("El horario especificado no existe.")
 
-        # Crear el chofer asignándole el usuario encontrado
+        # Crear chofer
         chofer = Chofer(
-            nombre=nombre,
-            apellidos=apellidos,
-            usuario=usuario,
-            rfc=rfc,
-            licencia=licencia,
-            certificaciones=certificaciones,
-            horario=horario,
-            pin=None  # Se inicializa sin PIN
+            nombre          = nombre,
+            apellidos       = apellidos,
+            usuario         = usuario,
+            rfc             = rfc,
+            licencia        = licencia,
+            certificaciones = certificaciones,
+            horario         = horario,
+            pin             = None
         )
         chofer.save()
 
-        # Enviar correo electrónico con usuario y contraseña en texto plano
-        sender_email = "logisticlogix0@gmail.com"  # Correo de envío
-        app_password = "nzvi ailf xxck gctf"         # Contraseña de aplicación (ejemplo)
-        subject = "Datos de acceso a la plataforma"
-        body = (
-            f"Estimado {chofer.nombre or usuario.username},\n\n"
+        # Enviar correo con credenciales
+        sender_email  = "logisticlogix0@gmail.com"
+        app_password  = "nzvi ailf xxck gctf"
+        subject       = "Datos de acceso a la plataforma"
+        body          = (
+            f"Estimado {chofer.nombre},\n\n"
             f"Su usuario es: {usuario.username}\n"
             f"Su contraseña es: {password_plain}\n\n"
-            f"Bienvenido a la familia Logix. Dentro de la App podrás cambiar tu contraseña si así lo prefieres."
+            "Bienvenido a la familia Logix. Podrás cambiar tu contraseña en la App."
         )
-
-        message = MIMEText(body, "plain")
+        message       = MIMEText(body, "plain")
         message["Subject"] = subject
-        message["From"] = sender_email
-
-        # Destinatario: email del usuario
-        recipients = [usuario.email]
+        message["From"]    = sender_email
+        recipients    = [usuario.email]
 
         try:
-            # Enviar correo utilizando SMTP con SSL (en este ejemplo, Gmail)
             with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
                 server.login(sender_email, app_password)
                 server.sendmail(sender_email, recipients, message.as_string())
@@ -136,7 +125,7 @@ class CreateChofer(graphene.Mutation):
 
         return CreateChofer(chofer=chofer)
 
-# Mutación para establecer el PIN del chofer
+# Mutación para establecer PIN del chofer
 class SetChoferPin(graphene.Mutation):
     class Arguments:
         pin = graphene.String(required=True)
@@ -147,23 +136,18 @@ class SetChoferPin(graphene.Mutation):
         user = info.context.user
         if not user.is_authenticated:
             raise Exception("Debes estar autenticado para establecer un PIN.")
-
-        try:
-            chofer = Chofer.objects.get(usuario=user)
-        except Chofer.DoesNotExist:
+        chofer = Chofer.objects.filter(usuario=user).first()
+        if not chofer:
             raise Exception("No tienes permiso para establecer un PIN.")
-
         if not pin.isdigit() or len(pin) != 4:
             raise Exception("El PIN debe contener exactamente 4 dígitos numéricos.")
-
         if es_secuencial(pin):
             raise Exception("El PIN no puede ser una secuencia numérica.")
-
         chofer.pin = pin
         chofer.save()
         return SetChoferPin(chofer=chofer)
 
-# Mutación para actualizar el PIN del chofer validando el PIN actual
+# Mutación para actualizar PIN validando el actual
 class UpdateChoferPin(graphene.Mutation):
     class Arguments:
         old_pin = graphene.String(required=True)
@@ -175,33 +159,72 @@ class UpdateChoferPin(graphene.Mutation):
         user = info.context.user
         if not user.is_authenticated:
             raise Exception("Debes estar autenticado para editar el PIN.")
-
-        try:
-            chofer = Chofer.objects.get(usuario=user)
-        except Chofer.DoesNotExist:
+        chofer = Chofer.objects.filter(usuario=user).first()
+        if not chofer:
             raise Exception("No tienes permiso para editar el PIN.")
-
-        # Verificar que el PIN actual coincide
         if chofer.pin != old_pin:
             raise Exception("El PIN actual no coincide.")
-
-        # Validar que el nuevo PIN tenga 4 dígitos numéricos
         if not new_pin.isdigit() or len(new_pin) != 4:
             raise Exception("El nuevo PIN debe contener exactamente 4 dígitos numéricos.")
-
-        # Evitar que el nuevo PIN sea una secuencia numérica
         if es_secuencial(new_pin):
             raise Exception("El nuevo PIN no puede ser una secuencia numérica.")
-
         chofer.pin = new_pin
         chofer.save()
         return UpdateChoferPin(chofer=chofer)
 
+# Mutación para actualizar datos del chofer
+class ActualizarChofer(graphene.Mutation):
+    class Arguments:
+        id              = graphene.Int(required=True)
+        nombre          = graphene.String(required=True)
+        apellidos       = graphene.String(required=True)
+        rfc             = graphene.String(required=True)
+        licencia        = graphene.String(required=True)
+        certificaciones = graphene.String()
+
+    chofer = graphene.Field(ChoferType)
+
+    def mutate(self, info, id, nombre, apellidos, rfc, licencia, certificaciones):
+        user = info.context.user
+        if not user.is_authenticated:
+            raise Exception("Debes estar autenticado para actualizar choferes.")
+        try:
+            chofer = Chofer.objects.get(pk=id)
+        except Chofer.DoesNotExist:
+            raise Exception("Chofer no encontrado.")
+        chofer.nombre          = nombre
+        chofer.apellidos       = apellidos
+        chofer.rfc             = rfc
+        chofer.licencia        = licencia
+        chofer.certificaciones = certificaciones
+        chofer.save()
+        return ActualizarChofer(chofer=chofer)
+
+# Mutación para eliminar chofer
+class EliminarChofer(graphene.Mutation):
+    class Arguments:
+        id = graphene.Int(required=True)
+
+    ok = graphene.Boolean()
+
+    def mutate(self, info, id):
+        user = info.context.user
+        if not user.is_authenticated:
+            raise Exception("Debes estar autenticado para eliminar choferes.")
+        try:
+            chofer = Chofer.objects.get(pk=id)
+        except Chofer.DoesNotExist:
+            raise Exception("Chofer no encontrado.")
+        chofer.delete()
+        return EliminarChofer(ok=True)
+
 # Definición de Mutaciones
 class Mutation(graphene.ObjectType):
-    create_chofer = CreateChofer.Field()
-    set_chofer_pin = SetChoferPin.Field()
-    update_chofer_pin = UpdateChoferPin.Field()
+    create_chofer      = CreateChofer.Field()
+    set_chofer_pin     = SetChoferPin.Field()
+    update_chofer_pin  = UpdateChoferPin.Field()
+    actualizar_chofer  = ActualizarChofer.Field()
+    eliminar_chofer    = EliminarChofer.Field()
 
-# Definición del esquema GraphQL
+# Esquema final
 schema = graphene.Schema(query=Query, mutation=Mutation)
