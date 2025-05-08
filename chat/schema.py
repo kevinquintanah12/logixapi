@@ -49,7 +49,6 @@ class ChatSubscription(Subscription):
         usuario_id = graphene.Int(required=True)
 
     def subscribe(self, info, usuario_id):
-        # Suscríbete al canal para el receptor
         return [f"user_{usuario_id}"]
 
     @classmethod
@@ -65,7 +64,31 @@ class ChatSubscription(Subscription):
         )
 
 # ——————————————————————————————————————————————————————————————
-# 4) Mutation para enviar mensaje
+# 3b) Subscription: chat de soporte (todos los agentes)
+# ——————————————————————————————————————————————————————————————
+class SupportSubscription(Subscription):
+    """
+    Emite un Mensaje cada vez que un cliente solicita atención o envía un mensaje de soporte.
+    """
+    mensaje = graphene.Field(MensajeType)
+
+    def subscribe(self, info):
+        # Canal común para todos los agentes
+        return ["support"]
+
+    @classmethod
+    def publish(cls, payload, info):
+        return cls(mensaje=payload["mensaje"])
+
+    @classmethod
+    def broadcast_support(cls, mensaje):
+        async_to_sync(cls.broadcast)(
+            group="support",
+            payload={"mensaje": mensaje},
+        )
+
+# ——————————————————————————————————————————————————————————————
+# 4) Mutations para mensajería
 # ——————————————————————————————————————————————————————————————
 class EnviarMensaje(graphene.Mutation):
     class Arguments:
@@ -85,9 +108,27 @@ class EnviarMensaje(graphene.Mutation):
             contenido=contenido
         )
 
-        # Emitimos el mensaje a través de la suscripción
         ChatSubscription.broadcast_mensaje(mensaje)
         return EnviarMensaje(mensaje=mensaje)
+
+class SolicitarSoporte(graphene.Mutation):
+    class Arguments:
+        contenido = graphene.String(required=True)
+
+    mensaje = graphene.Field(MensajeType)
+
+    @login_required
+    def mutate(self, info, contenido):
+        cliente = info.context.user
+        # receptor es genérico (None)
+        mensaje = Mensaje.objects.create(
+            emisor=cliente,
+            receptor=None,
+            contenido=contenido
+        )
+
+        SupportSubscription.broadcast_support(mensaje)
+        return SolicitarSoporte(mensaje=mensaje)
 
 # ——————————————————————————————————————————————————————————————
 # 5) Consultas opcionales: historial de chat
@@ -101,7 +142,6 @@ class Query(graphene.ObjectType):
     @login_required
     def resolve_mensajes_entre_usuarios(self, info, usuario_id):
         user = info.context.user
-        # Trae mensajes entre el usuario autenticado y otro usuario
         return Mensaje.objects.filter(
             models.Q(emisor=user, receptor_id=usuario_id) |
             models.Q(emisor_id=usuario_id, receptor=user)
@@ -112,9 +152,11 @@ class Query(graphene.ObjectType):
 # ——————————————————————————————————————————————————————————————
 class Mutation(graphene.ObjectType):
     enviar_mensaje = EnviarMensaje.Field()
+    solicitar_soporte = SolicitarSoporte.Field()
 
 class SubscriptionRoot(graphene.ObjectType):
     chat = ChatSubscription.Field()
+    support = SupportSubscription.Field()
 
 # ——————————————————————————————————————————————————————————————
 # 7) Schema final
