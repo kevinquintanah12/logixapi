@@ -1,12 +1,17 @@
 # -*- coding: utf-8 -*-
-# Chat público en Graphene + Django
+# Chat privado por cliente en Graphene + Django
 
 import asyncio
 _original_wait = asyncio.wait
+
 async def _patched_wait(aws, *args, **kwargs):
     loop = asyncio.get_event_loop()
-    wrapped = [loop.create_task(a) if asyncio.iscoroutine(a) else a for a in aws]
+    wrapped = [
+        loop.create_task(a) if asyncio.iscoroutine(a) else a
+        for a in aws
+    ]
     return await _original_wait(wrapped, *args, **kwargs)
+
 asyncio.wait = _patched_wait
 
 import graphene
@@ -16,62 +21,75 @@ from asgiref.sync import async_to_sync
 
 from .models import Mensaje
 
-# Tipado del mensaje
+# 1) Tipo de mensaje
 class MensajeType(DjangoObjectType):
     class Meta:
         model = Mensaje
         fields = "__all__"
 
-# Suscripción pública
-class PublicChatSubscription(Subscription):
+# 2) Suscripción privada por cliente
+class PrivateChatSubscription(Subscription):
     mensaje = graphene.Field(MensajeType)
 
-    def subscribe(self, info):
-        return ["public_channel"]
+    class Arguments:
+        nombre = graphene.String(required=True)
+
+    def subscribe(self, info, nombre):
+        # Cada cliente se une a su canal único
+        return [f"chat_{nombre}"]
 
     @classmethod
-    def publish(cls, payload, info):
+    def publish(cls, payload, info, nombre):
+        # Publica el mensaje recibido
         return cls(mensaje=payload["mensaje"])
 
     @classmethod
-    def broadcast_mensaje(cls, mensaje):
+    def broadcast_mensaje(cls, mensaje, nombre):
+        # Envía solo al canal de ese cliente
         async_to_sync(cls.broadcast)(
-            group="public_channel",
+            group=f"chat_{nombre}",
             payload={"mensaje": mensaje},
         )
 
-# Mutación pública (sin login)
+# 3) Mutación pública que usa canal privado
 class EnviarMensajePublico(graphene.Mutation):
     class Arguments:
-        nombre = graphene.String(required=False)
+        nombre = graphene.String(required=True)
         contenido = graphene.String(required=True)
 
     mensaje = graphene.Field(MensajeType)
 
-    def mutate(self, info, contenido, nombre=None):
+    def mutate(self, info, nombre, contenido):
+        # Crear el mensaje en BD
         mensaje = Mensaje.objects.create(
-            nombre=nombre or "Anónimo",
+            nombre=nombre,
             contenido=contenido
         )
-        PublicChatSubscription.broadcast_mensaje(mensaje)
+        # Enviar solo al canal del cliente con ese nombre
+        PrivateChatSubscription.broadcast_mensaje(mensaje, nombre)
         return EnviarMensajePublico(mensaje=mensaje)
 
-# Consulta de mensajes públicos
+# 4) Consulta de historial por cliente opcional
 class Query(graphene.ObjectType):
-    mensajes = graphene.List(MensajeType)
+    mensajes = graphene.List(
+        MensajeType,
+        nombre=graphene.String(required=True)
+    )
 
-    def resolve_mensajes(self, info):
-        return Mensaje.objects.all().order_by("-timestamp")[:50]
+    def resolve_mensajes(self, info, nombre):
+        # Opcional: solo devolver los mensajes de ese cliente
+        return Mensaje.objects.filter(
+            nombre=nombre
+        ).order_by("timestamp")
 
-# Mutaciones disponibles
+# 5) Registrar mutaciones y suscripciones
 class Mutation(graphene.ObjectType):
     enviar_mensaje_publico = EnviarMensajePublico.Field()
 
-# Suscripciones disponibles
 class SubscriptionRoot(graphene.ObjectType):
-    public_chat = PublicChatSubscription.Field()
+    private_chat = PrivateChatSubscription.Field()
 
-# Esquema final
+# 6) Crear esquema
 schema = graphene.Schema(
     query=Query,
     mutation=Mutation,
