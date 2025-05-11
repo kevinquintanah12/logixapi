@@ -7,14 +7,21 @@ from channels_graphql_ws import Subscription
 from asgiref.sync import async_to_sync
 from .models import Mensaje
 
-# Estado global
+# Estado global de clientes
 _ACTIVE_CLIENTS: set[str] = set()
 _LOCK = Lock()
+
+# — Modelo Django esperado —  
+# class Mensaje(models.Model):
+#     remitente = models.CharField(max_length=100)
+#     destinatario = models.CharField(max_length=100)
+#     contenido = models.TextField()
+#     timestamp = models.DateTimeField(auto_now_add=True)
 
 class MensajeType(DjangoObjectType):
     class Meta:
         model = Mensaje
-        fields = "__all__"
+        fields = ("remitente", "destinatario", "contenido", "timestamp")
 
 # — Suscripción para la cola de clientes —
 class ActiveClientsSubscription(Subscription):
@@ -40,10 +47,9 @@ class PrivateChatSubscription(Subscription):
     mensaje = graphene.Field(MensajeType)
 
     class Arguments:
-        nombre = graphene.String(required=True)
+        nombre = graphene.String(required=True)  # nombre del destinatario
 
     def subscribe(self, info, nombre):
-        # Cuando un cliente se suscribe, lo marcamos “activo”
         with _LOCK:
             first_time = nombre not in _ACTIVE_CLIENTS
             _ACTIVE_CLIENTS.add(nombre)
@@ -53,17 +59,18 @@ class PrivateChatSubscription(Subscription):
 
     @classmethod
     def publish(cls, payload, info, nombre):
+        # Solo publicamos mensajes cuyo destinatario coincida
         return cls(mensaje=payload["mensaje"])
 
     @classmethod
-    def broadcast_mensaje(cls, mensaje, nombre):
+    def broadcast_mensaje(cls, mensaje_obj):
+        dest = mensaje_obj.destinatario
         async_to_sync(cls.broadcast)(
-            group=f"chat_{nombre}",
-            payload={"mensaje": mensaje},
+            group=f"chat_{dest}",
+            payload={"mensaje": mensaje_obj},
         )
 
     def unsubscribe(self, info, nombre):
-        # Cuando un cliente cierra su canal privado, lo marcamos “inactivo”
         with _LOCK:
             if nombre in _ACTIVE_CLIENTS:
                 _ACTIVE_CLIENTS.remove(nombre)
@@ -73,27 +80,31 @@ class PrivateChatSubscription(Subscription):
 # — Mutación para enviar mensajes —
 class EnviarMensajePublico(graphene.Mutation):
     class Arguments:
-        nombre = graphene.String(required=True)
+        destinatario = graphene.String(required=True)
         contenido = graphene.String(required=True)
 
     mensaje = graphene.Field(MensajeType)
 
-    def mutate(self, info, nombre, contenido):
-        mensaje = Mensaje.objects.create(nombre=nombre, contenido=contenido)
-        PrivateChatSubscription.broadcast_mensaje(mensaje, nombre)
+    def mutate(self, info, destinatario, contenido):
+        remitente = info.context.user.username if info.context.user else "Admin"
+        mensaje = Mensaje.objects.create(
+            remitente=remitente,
+            destinatario=destinatario,
+            contenido=contenido
+        )
+        PrivateChatSubscription.broadcast_mensaje(mensaje)
         return EnviarMensajePublico(mensaje=mensaje)
 
 # — Query para historial y clientes activos —
 class Query(graphene.ObjectType):
     mensajes = graphene.List(
         MensajeType,
-        nombre=graphene.String(required=True)
+        nombre=graphene.String(required=True)  # aquí 'nombre' es el destinatario
     )
-
     clientes_activos = graphene.List(graphene.String)
 
     def resolve_mensajes(self, info, nombre):
-        return Mensaje.objects.filter(nombre=nombre).order_by("timestamp")
+        return Mensaje.objects.filter(destinatario=nombre).order_by("timestamp")
 
     def resolve_clientes_activos(self, info):
         with _LOCK:
