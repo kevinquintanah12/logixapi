@@ -83,23 +83,32 @@ class EnviarMensajePublico(graphene.Mutation):
         PrivateChatSubscription.broadcast_mensaje(mensaje, nombre)
         return EnviarMensajePublico(mensaje=mensaje)
 
-# — Query opcional de historial —
+# — Query para historial y clientes activos —
 class Query(graphene.ObjectType):
     mensajes = graphene.List(
         MensajeType,
         nombre=graphene.String(required=True)
     )
 
+    clientes_activos = graphene.List(graphene.String)
+
     def resolve_mensajes(self, info, nombre):
         return Mensaje.objects.filter(nombre=nombre).order_by("timestamp")
 
+    def resolve_clientes_activos(self, info):
+        with _LOCK:
+            return list(_ACTIVE_CLIENTS)
+
+# — Mutaciones —
 class Mutation(graphene.ObjectType):
     enviar_mensaje_publico = EnviarMensajePublico.Field()
 
+# — Suscripciones —
 class SubscriptionRoot(graphene.ObjectType):
     active_clients = ActiveClientsSubscription.Field()
-    private_chat   = PrivateChatSubscription.Field()
+    private_chat = PrivateChatSubscription.Field()
 
+# — Esquema principal —
 schema = graphene.Schema(
     query=Query,
     mutation=Mutation,
