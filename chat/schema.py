@@ -1,38 +1,41 @@
 # -*- coding: utf-8 -*-
-# Chat privado por cliente en Graphene + Django con cola dinámica
-
 import asyncio
 from threading import Lock
-_original_wait = asyncio.wait
-
-async def _patched_wait(aws, *args, **kwargs):
-    loop = asyncio.get_event_loop()
-    wrapped = [
-        loop.create_task(a) if asyncio.iscoroutine(a) else a
-        for a in aws
-    ]
-    return await _original_wait(wrapped, *args, **kwargs)
-
-asyncio.wait = _patched_wait
-
 import graphene
 from graphene_django.types import DjangoObjectType
 from channels_graphql_ws import Subscription
 from asgiref.sync import async_to_sync
-
 from .models import Mensaje
 
-# Conjunto global de clientes activos
+# Estado global
 _ACTIVE_CLIENTS: set[str] = set()
 _LOCK = Lock()
 
-# 1) Tipo de mensaje
 class MensajeType(DjangoObjectType):
     class Meta:
         model = Mensaje
         fields = "__all__"
 
-# 2) Suscripción privada por cliente
+# — Suscripción para la cola de clientes —
+class ActiveClientsSubscription(Subscription):
+    nombre = graphene.String()
+    action = graphene.String()  # "join" o "leave"
+
+    def subscribe(self, info):
+        return ["active_clients"]
+
+    @classmethod
+    def publish(cls, payload, info):
+        return cls(nombre=payload["nombre"], action=payload["action"])
+
+    @classmethod
+    def broadcast_event(cls, nombre: str, action: str):
+        async_to_sync(cls.broadcast)(
+            group="active_clients",
+            payload={"nombre": nombre, "action": action},
+        )
+
+# — Suscripción privada por cliente —
 class PrivateChatSubscription(Subscription):
     mensaje = graphene.Field(MensajeType)
 
@@ -40,9 +43,12 @@ class PrivateChatSubscription(Subscription):
         nombre = graphene.String(required=True)
 
     def subscribe(self, info, nombre):
-        # Añadir el cliente al set de activos
+        # Cuando un cliente se suscribe, lo marcamos “activo”
         with _LOCK:
+            first_time = nombre not in _ACTIVE_CLIENTS
             _ACTIVE_CLIENTS.add(nombre)
+        if first_time:
+            ActiveClientsSubscription.broadcast_event(nombre, "join")
         return [f"chat_{nombre}"]
 
     @classmethod
@@ -57,12 +63,14 @@ class PrivateChatSubscription(Subscription):
         )
 
     def unsubscribe(self, info, nombre):
-        # Cuando el cliente cierra la conexión, lo removemos
+        # Cuando un cliente cierra su canal privado, lo marcamos “inactivo”
         with _LOCK:
-            _ACTIVE_CLIENTS.discard(nombre)
+            if nombre in _ACTIVE_CLIENTS:
+                _ACTIVE_CLIENTS.remove(nombre)
+                ActiveClientsSubscription.broadcast_event(nombre, "leave")
         super().unsubscribe(info, nombre)
 
-# 3) Mutación pública que usa canal privado
+# — Mutación para enviar mensajes —
 class EnviarMensajePublico(graphene.Mutation):
     class Arguments:
         nombre = graphene.String(required=True)
@@ -71,39 +79,27 @@ class EnviarMensajePublico(graphene.Mutation):
     mensaje = graphene.Field(MensajeType)
 
     def mutate(self, info, nombre, contenido):
-        mensaje = Mensaje.objects.create(
-            nombre=nombre,
-            contenido=contenido
-        )
+        mensaje = Mensaje.objects.create(nombre=nombre, contenido=contenido)
         PrivateChatSubscription.broadcast_mensaje(mensaje, nombre)
         return EnviarMensajePublico(mensaje=mensaje)
 
-# 4) Query de historial por cliente
+# — Query opcional de historial —
 class Query(graphene.ObjectType):
     mensajes = graphene.List(
         MensajeType,
         nombre=graphene.String(required=True)
     )
-    clientes_activos = graphene.List(graphene.String)
 
     def resolve_mensajes(self, info, nombre):
-        return Mensaje.objects.filter(
-            nombre=nombre
-        ).order_by("timestamp")
+        return Mensaje.objects.filter(nombre=nombre).order_by("timestamp")
 
-    def resolve_clientes_activos(self, info):
-        # Devolver la lista actual de clientes en cola
-        with _LOCK:
-            return list(_ACTIVE_CLIENTS)
-
-# 5) Registrar mutaciones y suscripciones
 class Mutation(graphene.ObjectType):
     enviar_mensaje_publico = EnviarMensajePublico.Field()
 
 class SubscriptionRoot(graphene.ObjectType):
-    private_chat = PrivateChatSubscription.Field()
+    active_clients = ActiveClientsSubscription.Field()
+    private_chat   = PrivateChatSubscription.Field()
 
-# 6) Crear esquema
 schema = graphene.Schema(
     query=Query,
     mutation=Mutation,
