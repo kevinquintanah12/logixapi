@@ -1,9 +1,7 @@
 # -*- coding: utf-8 -*-
-# Servicio de Chat y Soporte en Graphene + Django
+# Chat público en Graphene + Django
 
 import asyncio
-import random
-
 _original_wait = asyncio.wait
 async def _patched_wait(aws, *args, **kwargs):
     loop = asyncio.get_event_loop()
@@ -15,130 +13,65 @@ import graphene
 from graphene_django.types import DjangoObjectType
 from channels_graphql_ws import Subscription
 from asgiref.sync import async_to_sync
-from graphql_jwt.decorators import login_required
-from django.contrib.auth.models import User, Group
-from django.db import models
 
 from .models import Mensaje
 
-# Tipado de Mensaje para Graphene
+# Tipado del mensaje
 class MensajeType(DjangoObjectType):
     class Meta:
         model = Mensaje
         fields = "__all__"
 
-# Suscripción de chat entre dos usuarios
-class ChatSubscription(Subscription):
-    mensaje = graphene.Field(MensajeType)
-
-    class Arguments:
-        usuario_id = graphene.Int(required=True)
-
-    def subscribe(self, info, usuario_id):
-        return [f"user_{usuario_id}"]
-
-    @classmethod
-    def publish(cls, payload, info, usuario_id):
-        return cls(mensaje=payload["mensaje"])
-
-    @classmethod
-    def broadcast_mensaje(cls, mensaje):
-        async_to_sync(cls.broadcast)(
-            group=f"user_{mensaje.receptor.id}",
-            payload={"mensaje": mensaje},
-        )
-
-# Suscripción general de soporte (grupo)
-class SupportSubscription(Subscription):
+# Suscripción pública
+class PublicChatSubscription(Subscription):
     mensaje = graphene.Field(MensajeType)
 
     def subscribe(self, info):
-        return ["support"]
+        return ["public_channel"]
 
     @classmethod
     def publish(cls, payload, info):
         return cls(mensaje=payload["mensaje"])
 
     @classmethod
-    def broadcast_support(cls, mensaje):
+    def broadcast_mensaje(cls, mensaje):
         async_to_sync(cls.broadcast)(
-            group="support",
+            group="public_channel",
             payload={"mensaje": mensaje},
         )
 
-# Mutación para enviar mensaje directo
-class EnviarMensaje(graphene.Mutation):
+# Mutación pública (sin login)
+class EnviarMensajePublico(graphene.Mutation):
     class Arguments:
-        receptor_id = graphene.Int(required=True)
+        nombre = graphene.String(required=False)
         contenido = graphene.String(required=True)
 
     mensaje = graphene.Field(MensajeType)
 
-    @login_required
-    def mutate(self, info, receptor_id, contenido):
-        emisor = info.context.user
-        receptor = User.objects.get(id=receptor_id)
+    def mutate(self, info, contenido, nombre=None):
         mensaje = Mensaje.objects.create(
-            emisor=emisor,
-            receptor=receptor,
+            nombre=nombre or "Anónimo",
             contenido=contenido
         )
-        ChatSubscription.broadcast_mensaje(mensaje)
-        return EnviarMensaje(mensaje=mensaje)
+        PublicChatSubscription.broadcast_mensaje(mensaje)
+        return EnviarMensajePublico(mensaje=mensaje)
 
-# Mutación para solicitar soporte a un grupo de agentes
-class SolicitarSoporte(graphene.Mutation):
-    class Arguments:
-        contenido = graphene.String(required=True)
-
-    mensaje = graphene.Field(MensajeType)
-
-    @login_required
-    def mutate(self, info, contenido):
-        cliente = info.context.user
-        # Obtener o crear el grupo de soporte
-        grupo_soporte, _ = Group.objects.get_or_create(name="soporte")
-        agentes = list(grupo_soporte.user_set.all())
-        if not agentes:
-            raise Exception("No hay agentes de soporte disponibles en el grupo 'soporte'.")
-        # Seleccionar un agente aleatorio del grupo
-        receptor = random.choice(agentes)
-
-        mensaje = Mensaje.objects.create(
-            emisor=cliente,
-            receptor=receptor,
-            contenido=contenido
-        )
-        # Broadcast a todos suscriptores de soporte
-        SupportSubscription.broadcast_support(mensaje)
-        return SolicitarSoporte(mensaje=mensaje)
-
-# Consultas para obtener mensajes
+# Consulta de mensajes públicos
 class Query(graphene.ObjectType):
-    mensajes_entre_usuarios = graphene.List(
-        MensajeType,
-        usuario_id=graphene.Int(required=True)
-    )
+    mensajes = graphene.List(MensajeType)
 
-    @login_required
-    def resolve_mensajes_entre_usuarios(self, info, usuario_id):
-        user = info.context.user
-        return Mensaje.objects.filter(
-            models.Q(emisor=user, receptor_id=usuario_id) |
-            models.Q(emisor_id=usuario_id, receptor=user)
-        ).order_by("timestamp")
+    def resolve_mensajes(self, info):
+        return Mensaje.objects.all().order_by("-timestamp")[:50]
 
-# Punto de entrada de Mutaciones
+# Mutaciones disponibles
 class Mutation(graphene.ObjectType):
-    enviar_mensaje = EnviarMensaje.Field()
-    solicitar_soporte = SolicitarSoporte.Field()
+    enviar_mensaje_publico = EnviarMensajePublico.Field()
 
-# Punto de entrada de Suscripciones
+# Suscripciones disponibles
 class SubscriptionRoot(graphene.ObjectType):
-    chat = ChatSubscription.Field()
-    support = SupportSubscription.Field()
+    public_chat = PublicChatSubscription.Field()
 
-# Definición del esquema completo
+# Esquema final
 schema = graphene.Schema(
     query=Query,
     mutation=Mutation,
