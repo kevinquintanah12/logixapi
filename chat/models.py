@@ -1,9 +1,10 @@
 from django.db import models
 
 class Mensaje(models.Model):
-    nombre = models.CharField(max_length=100, blank=True, null=True)  # opcional
-    contenido = models.TextField()
-    timestamp = models.DateTimeField(auto_now_add=True)
+    remitente    = models.CharField(max_length=100)
+    destinatario = models.CharField(max_length=100)
+    contenido    = models.TextField()
+    timestamp    = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"{self.nombre or 'Anónimo'}: {self.contenido[:30]}"
+        return f"{self.timestamp} | {self.remitente} → {self.destinatario}: {self.contenido[:20]}"

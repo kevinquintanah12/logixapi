@@ -11,17 +11,11 @@ from .models import Mensaje
 _ACTIVE_CLIENTS: set[str] = set()
 _LOCK = Lock()
 
-# — Modelo Django esperado —  
-# class Mensaje(models.Model):
-#     remitente = models.CharField(max_length=100)
-#     destinatario = models.CharField(max_length=100)
-#     contenido = models.TextField()
-#     timestamp = models.DateTimeField(auto_now_add=True)
-
 class MensajeType(DjangoObjectType):
     class Meta:
         model = Mensaje
-        fields = ("remitente", "destinatario", "contenido", "timestamp")
+        # Exponemos todos los campos que queramos consultar
+        fields = ("id", "remitente", "destinatario", "contenido", "timestamp")
 
 # — Suscripción para la cola de clientes —
 class ActiveClientsSubscription(Subscription):
@@ -47,7 +41,7 @@ class PrivateChatSubscription(Subscription):
     mensaje = graphene.Field(MensajeType)
 
     class Arguments:
-        nombre = graphene.String(required=True)  # nombre del destinatario
+        nombre = graphene.String(required=True)  # aquí 'nombre' es el destinatario
 
     def subscribe(self, info, nombre):
         with _LOCK:
@@ -55,11 +49,11 @@ class PrivateChatSubscription(Subscription):
             _ACTIVE_CLIENTS.add(nombre)
         if first_time:
             ActiveClientsSubscription.broadcast_event(nombre, "join")
+        # Escuchamos el grupo de este destinatario
         return [f"chat_{nombre}"]
 
     @classmethod
     def publish(cls, payload, info, nombre):
-        # Solo publicamos mensajes cuyo destinatario coincida
         return cls(mensaje=payload["mensaje"])
 
     @classmethod
@@ -81,7 +75,7 @@ class PrivateChatSubscription(Subscription):
 class EnviarMensajePublico(graphene.Mutation):
     class Arguments:
         destinatario = graphene.String(required=True)
-        contenido = graphene.String(required=True)
+        contenido    = graphene.String(required=True)
 
     mensaje = graphene.Field(MensajeType)
 
@@ -92,6 +86,7 @@ class EnviarMensajePublico(graphene.Mutation):
             destinatario=destinatario,
             contenido=contenido
         )
+        # Publicamos en el canal del destinatario
         PrivateChatSubscription.broadcast_mensaje(mensaje)
         return EnviarMensajePublico(mensaje=mensaje)
 
@@ -99,7 +94,7 @@ class EnviarMensajePublico(graphene.Mutation):
 class Query(graphene.ObjectType):
     mensajes = graphene.List(
         MensajeType,
-        nombre=graphene.String(required=True)  # aquí 'nombre' es el destinatario
+        nombre=graphene.String(required=True)  # 'nombre' es el destinatario
     )
     clientes_activos = graphene.List(graphene.String)
 
@@ -117,7 +112,7 @@ class Mutation(graphene.ObjectType):
 # — Suscripciones —
 class SubscriptionRoot(graphene.ObjectType):
     active_clients = ActiveClientsSubscription.Field()
-    private_chat = PrivateChatSubscription.Field()
+    private_chat   = PrivateChatSubscription.Field()
 
 # — Esquema principal —
 schema = graphene.Schema(
