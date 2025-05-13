@@ -89,7 +89,13 @@ class Query(graphene.ObjectType):
     paquetes_por_destinatario = graphene.List(
         PaqueteType, destinatario_id=graphene.Int(required=True)
     )
-    paquetes_por_nombre       = graphene.List(
+    paquetes_por_cliente      = graphene.List(
+        PaqueteType, cliente_id=graphene.Int(required=True)
+    )
+    paquetes_por_nombre_destinatario = graphene.List(
+        PaqueteType, nombre=graphene.String(required=True)
+    )
+    paquetes_por_nombre_cliente      = graphene.List(
         PaqueteType, nombre=graphene.String(required=True)
     )
     paquetes_por_numero_guia  = graphene.List(
@@ -109,11 +115,18 @@ class Query(graphene.ObjectType):
         return Paquete.objects.last()
 
     def resolve_paquetes_por_destinatario(self, info, destinatario_id):
-        # Asume que Producto tiene FK a Destinatario
         return Paquete.objects.filter(producto__destinatario__id=destinatario_id)
 
-    def resolve_paquetes_por_nombre(self, info, nombre):
-        return Paquete.objects.filter(producto__nombre__icontains=nombre)
+    def resolve_paquetes_por_cliente(self, info, cliente_id):
+        return Paquete.objects.filter(producto__cliente__id=cliente_id)
+
+    def resolve_paquetes_por_nombre_destinatario(self, info, nombre):
+        # Filtra por nombre del destinatario relacionado con el producto
+        return Paquete.objects.filter(producto__destinatario__nombre__icontains=nombre)
+
+    def resolve_paquetes_por_nombre_cliente(self, info, nombre):
+        # Filtra por nombre del cliente relacionado con el producto
+        return Paquete.objects.filter(producto__cliente__nombre__icontains=nombre)
 
     def resolve_paquetes_por_numero_guia(self, info, numero_guia):
         return Paquete.objects.filter(numero_guia__icontains=numero_guia)
