@@ -1,10 +1,8 @@
 import graphene
 import graphql_jwt
+import random, string
 from django.contrib.auth import get_user_model
 from graphene_django import DjangoObjectType
-from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
-from django.utils.encoding import force_bytes, force_str
-from django.contrib.auth.tokens import default_token_generator
 from django.core.mail import send_mail
 from django.conf import settings
 
@@ -13,39 +11,41 @@ User = get_user_model()
 class UserType(DjangoObjectType):
     class Meta:
         model = User
-        exclude = ('password',)  # nunca exponemos el hash
+        exclude = ('password',)
 
-# ────────────────────────────────────────────
-# MUTATION: CREAR USUARIO + ENLACE DE ACTIVACIÓN
-# ────────────────────────────────────────────
+def make_temp_password(length=10):
+    # Genera una cadena de letras+números aleatoria
+    chars = string.ascii_letters + string.digits
+    return ''.join(random.choice(chars) for _ in range(length))
+
 class CreateUser(graphene.Mutation):
-    ok = graphene.Boolean()
+    user         = graphene.Field(UserType)
+    tempPassword = graphene.String()
 
     class Arguments:
         username = graphene.String(required=True)
         email    = graphene.String(required=True)
 
     def mutate(self, info, username, email):
-        # 1) Crear usuario inactivo, sin contraseña
+        # 1) Generar contraseña temporal
+        temp_pass = make_temp_password()
+
+        # 2) Crear usuario activo con esa contraseña
         user = User.objects.create_user(
             username=username,
             email=email,
-            password=None,      # contraseña vacía
-            is_active=False     # no activo hasta validar
+            password=temp_pass,
+            is_active=True,
         )
 
-        # 2) Generar token y enlace
-        uidb64 = urlsafe_base64_encode(force_bytes(user.pk))
-        token  = default_token_generator.make_token(user)
-        activation_link = f"https://tudominio.com/activate/{uidb64}/{token}"
-
-        # 3) Enviar correo
-        subject = "Activa tu cuenta"
+        # 3) Enviar email con la contraseña
+        subject = "Tu cuenta está lista"
         message = (
             f"Hola {username},\n\n"
-            f"Para activar tu cuenta, haz clic en el siguiente enlace:\n\n"
-            f"{activation_link}\n\n"
-            "Si no solicitaste esto, ignora este correo."
+            "Tu cuenta ha sido creada. Estos son tus datos:\n\n"
+            f"Usuario: {username}\n"
+            f"Contraseña temporal: {temp_pass}\n\n"
+            "Podrás cambiarla luego desde tu perfil."
         )
         send_mail(
             subject,
@@ -55,44 +55,14 @@ class CreateUser(graphene.Mutation):
             fail_silently=False,
         )
 
-        return CreateUser(ok=True)
+        # 4) Devolver user + temp_pass al cliente
+        return CreateUser(user=user, tempPassword=temp_pass)
 
-# ────────────────────────────────────────────
-# MUTATION: ACTIVAR CUENTA + SETEAR CONTRASEÑA
-# ────────────────────────────────────────────
-class ActivateUser(graphene.Mutation):
-    ok = graphene.Boolean()
-
-    class Arguments:
-        uidb64       = graphene.String(required=True)
-        token        = graphene.String(required=True)
-        new_password = graphene.String(required=True)
-
-    def mutate(self, info, uidb64, token, new_password):
-        try:
-            uid  = force_str(urlsafe_base64_decode(uidb64))
-            user = User.objects.get(pk=uid)
-        except Exception:
-            raise Exception("Enlace inválido o usuario no encontrado.")
-
-        if not default_token_generator.check_token(user, token):
-            raise Exception("Token inválido o expirado.")
-
-        # Activar y setear contraseña
-        user.set_password(new_password)
-        user.is_active = True
-        user.save()
-
-        return ActivateUser(ok=True)
-
-# ────────────────────────────────────────────
-# SCHEMA
-# ────────────────────────────────────────────
 class Query(graphene.ObjectType):
     me    = graphene.Field(UserType)
     users = graphene.List(UserType)
 
-    @login_required
+    @graphql_jwt.decorators.login_required
     def resolve_me(self, info):
         return info.context.user
 
@@ -100,13 +70,9 @@ class Query(graphene.ObjectType):
         return User.objects.filter(is_active=True)
 
 class Mutation(graphene.ObjectType):
-    # Creación + activación
     create_user   = CreateUser.Field()
-    activate_user = ActivateUser.Field()
-
-    # JWT
-    token_auth   = graphql_jwt.ObtainJSONWebToken.Field()
-    verify_token = graphql_jwt.Verify.Field()
-    refresh_token= graphql_jwt.Refresh.Field()
+    token_auth    = graphql_jwt.ObtainJSONWebToken.Field()
+    verify_token  = graphql_jwt.Verify.Field()
+    refresh_token = graphql_jwt.Refresh.Field()
 
 schema = graphene.Schema(query=Query, mutation=Mutation)
