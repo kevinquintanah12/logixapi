@@ -19,8 +19,7 @@ class ChoferType(DjangoObjectType):
     class Meta:
         model = Chofer
 
-class UserType(DjangoObjectType):
-    chofer = graphene.Field(ChoferType)
+
 
     class Meta:
         model = User
