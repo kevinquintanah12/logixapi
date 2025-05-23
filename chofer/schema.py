@@ -5,6 +5,7 @@ from graphene_django.types import DjangoObjectType
 from .models import Chofer
 from horarios.models import Horario
 from horarios.schema import HorarioType
+from users.schema import UserType  # O el módulo correcto donde está definido
 
 User = get_user_model()
 
