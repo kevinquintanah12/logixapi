@@ -1,13 +1,13 @@
 import graphene
 from graphene_django.types import DjangoObjectType
+from django.contrib.auth.models import User
 from .models import Chofer
 from horarios.models import Horario
 from horarios.schema import HorarioType
-from django.contrib.auth.models import User
 
 # Función para verificar si un PIN es secuencial
 def es_secuencial(pin):
-    ascending  = all(int(pin[i]) + 1 == int(pin[i+1]) for i in range(len(pin) - 1))
+    ascending = all(int(pin[i]) + 1 == int(pin[i+1]) for i in range(len(pin) - 1))
     descending = all(int(pin[i]) - 1 == int(pin[i+1]) for i in range(len(pin) - 1))
     return ascending or descending
 
@@ -24,23 +24,21 @@ class Query(graphene.ObjectType):
     check_pin          = graphene.Boolean(pin=graphene.String(required=True))
 
     def resolve_all_choferes(self, info, **kwargs):
-        # Sin autenticación requerida
         return Chofer.objects.all()
 
     def resolve_chofer_by_id(self, info, id):
         return Chofer.objects.filter(pk=id).first()
 
     def resolve_chofer_autenticado(self, info):
-        # Asume contexto con usuario disponible
         user = info.context.user
         return Chofer.objects.filter(usuario=user).first()
 
     def resolve_check_pin(self, info, pin):
         user = info.context.user
         chofer = Chofer.objects.filter(usuario=user).first()
-        return chofer and chofer.pin == pin
+        return bool(chofer and chofer.pin == pin)
 
-# Mutación para crear un Chofer (sin correo ni user creation)
+# Mutación para crear un Chofer (sin crear User ni correo)
 class CreateChofer(graphene.Mutation):
     class Arguments:
         user_id         = graphene.Int(required=True)
@@ -54,8 +52,8 @@ class CreateChofer(graphene.Mutation):
     chofer = graphene.Field(ChoferType)
 
     def mutate(self, info, user_id, nombre, apellidos, rfc, licencia, certificaciones, horario_id):
-        usuario = User.objects.get(id=user_id)
-        horario = Horario.objects.get(id=horario_id)
+        usuario = User.objects.get(pk=user_id)
+        horario = Horario.objects.get(pk=horario_id)
         chofer = Chofer(
             nombre=nombre,
             apellidos=apellidos,
@@ -69,6 +67,30 @@ class CreateChofer(graphene.Mutation):
         chofer.save()
         return CreateChofer(chofer=chofer)
 
+# Mutación para asignar un User ya existente a un Chofer existente
+class AssignUserToChofer(graphene.Mutation):
+    class Arguments:
+        chofer_id = graphene.Int(required=True)
+        user_id   = graphene.Int(required=True)
+
+    chofer = graphene.Field(ChoferType)
+    ok     = graphene.Boolean()
+
+    def mutate(self, info, chofer_id, user_id):
+        try:
+            chofer = Chofer.objects.get(pk=chofer_id)
+        except Chofer.DoesNotExist:
+            raise Exception(f"Chofer con id={chofer_id} no existe")
+
+        try:
+            usuario = User.objects.get(pk=user_id)
+        except User.DoesNotExist:
+            raise Exception(f"Usuario con id={user_id} no existe")
+
+        chofer.usuario = usuario
+        chofer.save()
+        return AssignUserToChofer(chofer=chofer, ok=True)
+
 # Mutación para establecer PIN del chofer
 class SetChoferPin(graphene.Mutation):
     class Arguments:
@@ -78,6 +100,8 @@ class SetChoferPin(graphene.Mutation):
 
     def mutate(self, info, pin):
         chofer = Chofer.objects.filter(usuario=info.context.user).first()
+        if not chofer:
+            raise Exception("No estás asociado a ningún chofer")
         if not pin.isdigit() or len(pin) != 4 or es_secuencial(pin):
             raise Exception("PIN inválido")
         chofer.pin = pin
@@ -94,6 +118,8 @@ class UpdateChoferPin(graphene.Mutation):
 
     def mutate(self, info, old_pin, new_pin):
         chofer = Chofer.objects.filter(usuario=info.context.user).first()
+        if not chofer:
+            raise Exception("No estás asociado a ningún chofer")
         if chofer.pin != old_pin or not new_pin.isdigit() or len(new_pin) != 4 or es_secuencial(new_pin):
             raise Exception("PIN inválido")
         chofer.pin = new_pin
@@ -134,11 +160,13 @@ class EliminarChofer(graphene.Mutation):
         chofer.delete()
         return EliminarChofer(ok=True)
 
+# Registro de todas las mutaciones
 class Mutation(graphene.ObjectType):
-    create_chofer     = CreateChofer.Field()
-    set_chofer_pin    = SetChoferPin.Field()
-    update_chofer_pin = UpdateChoferPin.Field()
-    actualizar_chofer = ActualizarChofer.Field()
-    eliminar_chofer   = EliminarChofer.Field()
+    create_chofer        = CreateChofer.Field()
+    assign_user_to_chofer = AssignUserToChofer.Field()
+    set_chofer_pin       = SetChoferPin.Field()
+    update_chofer_pin    = UpdateChoferPin.Field()
+    actualizar_chofer    = ActualizarChofer.Field()
+    eliminar_chofer      = EliminarChofer.Field()
 
 schema = graphene.Schema(query=Query, mutation=Mutation)
