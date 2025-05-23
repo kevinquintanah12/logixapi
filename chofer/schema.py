@@ -1,9 +1,12 @@
 import graphene
+import graphql_jwt
+from django.contrib.auth import get_user_model
 from graphene_django.types import DjangoObjectType
-from django.contrib.auth.models import User
 from .models import Chofer
 from horarios.models import Horario
 from horarios.schema import HorarioType
+
+User = get_user_model()
 
 # Función para verificar si un PIN es secuencial
 def es_secuencial(pin):
@@ -11,12 +14,37 @@ def es_secuencial(pin):
     descending = all(int(pin[i]) - 1 == int(pin[i+1]) for i in range(len(pin) - 1))
     return ascending or descending
 
-# Tipo GraphQL para el modelo Chofer
+# --- GraphQL Types ---
 class ChoferType(DjangoObjectType):
     class Meta:
         model = Chofer
 
-# Definición de consultas GraphQL
+class UserType(DjangoObjectType):
+    chofer = graphene.Field(ChoferType)
+
+    class Meta:
+        model = User
+        exclude = ('password',)
+
+    def resolve_chofer(self, info):
+        return Chofer.objects.filter(usuario=self).first()
+
+# --- Auth Mutation: TokenAuthDriver ---
+class TokenAuthDriver(graphql_jwt.ObtainJSONWebToken):
+    user   = graphene.Field(UserType)
+    chofer = graphene.Field(ChoferType)
+
+    @classmethod
+    def resolve(cls, root, info, **kwargs):
+        user = info.context.user
+        return cls(
+            token=getattr(root, 'token', None),
+            payload=getattr(root, 'payload', None),
+            user=user,
+            chofer=Chofer.objects.filter(usuario=user).first()
+        )
+
+# --- Chofer Queries ---
 class Query(graphene.ObjectType):
     all_choferes       = graphene.List(ChoferType)
     chofer_by_id       = graphene.Field(ChoferType, id=graphene.Int())
@@ -38,7 +66,7 @@ class Query(graphene.ObjectType):
         chofer = Chofer.objects.filter(usuario=user).first()
         return bool(chofer and chofer.pin == pin)
 
-# Mutación para crear un Chofer (sin crear User ni correo)
+# --- Chofer Mutations ---
 class CreateChofer(graphene.Mutation):
     class Arguments:
         user_id         = graphene.Int(required=True)
@@ -67,7 +95,6 @@ class CreateChofer(graphene.Mutation):
         chofer.save()
         return CreateChofer(chofer=chofer)
 
-# Mutación para asignar un User ya existente a un Chofer existente
 class AssignUserToChofer(graphene.Mutation):
     class Arguments:
         chofer_id = graphene.Int(required=True)
@@ -91,12 +118,11 @@ class AssignUserToChofer(graphene.Mutation):
         chofer.save()
         return AssignUserToChofer(chofer=chofer, ok=True)
 
-# Mutación para establecer PIN del chofer
 class SetChoferPin(graphene.Mutation):
+    chofer = graphene.Field(ChoferType)
+
     class Arguments:
         pin = graphene.String(required=True)
-
-    chofer = graphene.Field(ChoferType)
 
     def mutate(self, info, pin):
         chofer = Chofer.objects.filter(usuario=info.context.user).first()
@@ -108,13 +134,12 @@ class SetChoferPin(graphene.Mutation):
         chofer.save()
         return SetChoferPin(chofer=chofer)
 
-# Mutación para actualizar PIN validando el actual
 class UpdateChoferPin(graphene.Mutation):
+    chofer = graphene.Field(ChoferType)
+
     class Arguments:
         old_pin = graphene.String(required=True)
         new_pin = graphene.String(required=True)
-
-    chofer = graphene.Field(ChoferType)
 
     def mutate(self, info, old_pin, new_pin):
         chofer = Chofer.objects.filter(usuario=info.context.user).first()
@@ -126,7 +151,6 @@ class UpdateChoferPin(graphene.Mutation):
         chofer.save()
         return UpdateChoferPin(chofer=chofer)
 
-# Mutación para actualizar datos del chofer
 class ActualizarChofer(graphene.Mutation):
     class Arguments:
         id              = graphene.Int(required=True)
@@ -148,12 +172,10 @@ class ActualizarChofer(graphene.Mutation):
         chofer.save()
         return ActualizarChofer(chofer=chofer)
 
-# Mutación para eliminar chofer
 class EliminarChofer(graphene.Mutation):
+    ok = graphene.Boolean()
     class Arguments:
         id = graphene.Int(required=True)
-
-    ok = graphene.Boolean()
 
     def mutate(self, info, id):
         chofer = Chofer.objects.get(pk=id)
@@ -162,6 +184,10 @@ class EliminarChofer(graphene.Mutation):
 
 # Registro de todas las mutaciones
 class Mutation(graphene.ObjectType):
+    # JWT Authentication
+    token_auth_driver  = TokenAuthDriver.Field()
+
+    # Chofer operations
     create_chofer        = CreateChofer.Field()
     assign_user_to_chofer = AssignUserToChofer.Field()
     set_chofer_pin       = SetChoferPin.Field()
