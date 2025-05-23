@@ -19,12 +19,8 @@ def es_secuencial(pin):
 class ChoferType(DjangoObjectType):
     class Meta:
         model = Chofer
+        fields = "__all__"  # o los campos que quieras exponer
 
-
-
-    class Meta:
-        model = User
-        exclude = ('password',)
 
     def resolve_chofer(self, info):
         return Chofer.objects.filter(usuario=self).first()
