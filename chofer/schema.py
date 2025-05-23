@@ -5,11 +5,8 @@ from horarios.models import Horario
 from horarios.schema import HorarioType
 from django.contrib.auth.models import User
 
-# Para el envío de correo
-from email.mime.text import MIMEText
-import smtplib
-
 # Función para verificar si un PIN es secuencial
+
 def es_secuencial(pin):
     ascending  = all(int(pin[i]) + 1 == int(pin[i+1]) for i in range(len(pin) - 1))
     descending = all(int(pin[i]) - 1 == int(pin[i+1]) for i in range(len(pin) - 1))
@@ -54,7 +51,7 @@ class Query(graphene.ObjectType):
             raise Exception("No se encontró un chofer asociado a tu cuenta.")
         return chofer.pin == pin
 
-# Mutación para crear un Chofer recibiendo contraseña en texto plano
+# Mutación para crear un Chofer (sin correo ni user creation)
 class CreateChofer(graphene.Mutation):
     class Arguments:
         user_id         = graphene.Int(required=True)
@@ -69,9 +66,6 @@ class CreateChofer(graphene.Mutation):
     chofer = graphene.Field(ChoferType)
 
     def mutate(self, info, user_id, nombre, apellidos, rfc, licencia, certificaciones, horario_id, password):
-        # Guardamos la contraseña en claro para el email
-        password_plain = password
-
         # Buscar el usuario
         try:
             usuario = User.objects.get(id=user_id)
@@ -79,7 +73,7 @@ class CreateChofer(graphene.Mutation):
             raise Exception("El usuario especificado no existe.")
 
         # Asignar y guardar contraseña cifrada
-        usuario.set_password(password_plain)
+        usuario.set_password(password)
         usuario.save()
 
         # Verificar horario
@@ -100,28 +94,6 @@ class CreateChofer(graphene.Mutation):
             pin             = None
         )
         chofer.save()
-
-        # Enviar correo con credenciales
-        sender_email  = "logisticlogix0@gmail.com"
-        app_password  = "nzvi ailf xxck gctf"
-        subject       = "Datos de acceso a la plataforma"
-        body          = (
-            f"Estimado {chofer.nombre},\n\n"
-            f"Su usuario es: {usuario.username}\n"
-            f"Su contraseña es: {password_plain}\n\n"
-            "Bienvenido a la familia Logix. Podrás cambiar tu contraseña en la App."
-        )
-        message       = MIMEText(body, "plain")
-        message["Subject"] = subject
-        message["From"]    = sender_email
-        recipients    = [usuario.email]
-
-        try:
-            with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
-                server.login(sender_email, app_password)
-                server.sendmail(sender_email, recipients, message.as_string())
-        except Exception as e:
-            print(f"Error al enviar el correo: {e}")
 
         return CreateChofer(chofer=chofer)
 
@@ -213,7 +185,7 @@ class EliminarChofer(graphene.Mutation):
             raise Exception("Debes estar autenticado para eliminar choferes.")
         try:
             chofer = Chofer.objects.get(pk=id)
-        except Chofer.DoesNotExist:
+        except Choфер.DoesNotExist:
             raise Exception("Chofer no encontrado.")
         chofer.delete()
         return EliminarChofer(ok=True)
